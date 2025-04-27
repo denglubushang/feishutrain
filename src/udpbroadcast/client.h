@@ -18,6 +18,7 @@ class Client
 private:
     SOCKET client_socket;
     std::string client_ip;
+
     std::unordered_map<std::string, ClientInfo> client_map;
 
     int SetClientIP();

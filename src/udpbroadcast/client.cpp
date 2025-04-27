@@ -1,6 +1,7 @@
 #pragma once
 #include "client.h"
 
+
 void Client::addClient(const std::string& ip, int port, bool is_online) {
     ClientInfo client_info;
     client_info.ip_address = ip;
@@ -21,6 +22,7 @@ int Client::SetClientIP() {
     struct addrinfo hints = {};
     struct addrinfo* result = nullptr;
 
+
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
@@ -29,6 +31,7 @@ int Client::SetClientIP() {
         std::cerr << ("Error getting IP address: %d\n", WSAGetLastError()) << std::endl;
         return -1;
     }
+
 
     for (struct addrinfo* ptr = result; ptr != nullptr; ptr = ptr->ai_next)
     {
@@ -41,8 +44,10 @@ int Client::SetClientIP() {
     return 1;
 }
 
+
 DWORD WINAPI Client::BroadcastThread(LPVOID lpParam) {
     Client* client = static_cast<Client*>(lpParam);
+
     struct sockaddr_in broadcast_address;
     broadcast_address.sin_family = AF_INET;
     broadcast_address.sin_port = htons(8888);
@@ -52,6 +57,7 @@ DWORD WINAPI Client::BroadcastThread(LPVOID lpParam) {
         return -1;
     }
     std::string message = "discovery " + client->client_ip;
+
     const char* msg = message.c_str();
 
     while (true)
@@ -62,6 +68,7 @@ DWORD WINAPI Client::BroadcastThread(LPVOID lpParam) {
 
     return 0;
 }
+
 
 DWORD WINAPI Client::ClientResponseThread(LPVOID lpParam) {
     std::pair<Client*, std::string>* params = static_cast<std::pair<Client*, std::string>*>(lpParam);
@@ -78,6 +85,7 @@ DWORD WINAPI Client::ClientResponseThread(LPVOID lpParam) {
         return -1;
     }
     std::string message = "ack " + client->client_ip;
+
     const char* msg = message.c_str();
     if (sendto(client->client_socket, msg, strlen(msg), 0, (struct sockaddr*)&target_address, sizeof(target_address)) == SOCKET_ERROR)
     {
@@ -91,18 +99,18 @@ DWORD WINAPI Client::ClientResponseThread(LPVOID lpParam) {
 
 DWORD WINAPI Client::ReceiverThread(LPVOID lpParam) {
     Client* client = static_cast<Client*>(lpParam);
-    //ÉèÖÃ½ÓÊÕµØÖ·
+    //ï¿½ï¿½ï¿½Ã½ï¿½ï¿½Õµï¿½Ö·
     struct sockaddr_in recv_address;
     recv_address.sin_family = AF_INET;
     recv_address.sin_port = htons(8888);
     recv_address.sin_addr.s_addr = INADDR_ANY;
-    //´´½¨½ÓÊÕsocketÌ×½Ó×Ö
+    //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½socketï¿½×½ï¿½ï¿½ï¿½
     SOCKET recv_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (recv_socket == INVALID_SOCKET) {
         std::cerr << "Error creating socket: " << WSAGetLastError() << std::endl;
         return -1;
     }
-    //°ó¶¨½ÓÊÕµØÖ·
+    //ï¿½ó¶¨½ï¿½ï¿½Õµï¿½Ö·
     if (bind(recv_socket, (struct sockaddr*)&recv_address, sizeof(recv_address)) == SOCKET_ERROR) {
         std::cerr << "Error binding socket: " << WSAGetLastError() << std::endl;
         closesocket(recv_socket);
@@ -119,7 +127,7 @@ DWORD WINAPI Client::ReceiverThread(LPVOID lpParam) {
             std::cerr << "Error receiving message: " << WSAGetLastError() << std::endl;
             continue;
         }
-        //½âÎöÊÕµ½µÄÐÅÏ¢
+        //ï¿½ï¿½ï¿½ï¿½ï¿½Õµï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
         buffer[recv_len] = '\0';
         std::string message(buffer);
 
@@ -132,7 +140,7 @@ DWORD WINAPI Client::ReceiverThread(LPVOID lpParam) {
         if (sender_ip == client->client_ip) {
             continue;
         }
-        //´¦ÀídiscoveryÐÅÏ¢
+        //ï¿½ï¿½ï¿½ï¿½discoveryï¿½ï¿½Ï¢
         if (message.find("discovery") != std::string::npos) {
             std::cerr << "Receiver message: " << message << "from " << sender_ip << std::endl;
             client->addClient(sender_ip, 8888, true);
@@ -150,6 +158,7 @@ DWORD WINAPI Client::ReceiverThread(LPVOID lpParam) {
 }
 
 Client::Client() {
+
     // Get client IP address
     this->SetClientIP();
 
@@ -193,6 +202,7 @@ int Client::StartBroadcastThread()
     CloseHandle(hThread);
     return 0;
 }
+
 
 int  Client::StartReceiverThread() {
     HANDLE hThread = CreateThread(nullptr, 0, ReceiverThread, this, 0, nullptr);
