@@ -17,3 +17,10 @@ public:
     ~Client();
     int ClientSendMsg(std::string target_ip, int target_port, std::string message);
 };
+
+struct SendParams {
+    Client* client;
+    std::string target_ip;
+    int target_port;
+    std::string message;
+};
