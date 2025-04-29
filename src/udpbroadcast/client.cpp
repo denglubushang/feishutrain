@@ -1,14 +1,6 @@
 #pragma once
 #include "client.h"
 
-// 定义一个结构体来打包参数
-struct SendParams {
-    Client* client;
-    std::string target_ip;
-    int target_port;
-    std::string message;
-};
-
 DWORD WINAPI Client::ClientSendThread(LPVOID lpParam)
 {
     SendParams* params = static_cast<SendParams*>(lpParam);
