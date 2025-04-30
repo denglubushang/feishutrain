@@ -6,67 +6,6 @@
 #include <iostream>
 #include "server.h"
 
-//std::string ServerGetWirelessIP() {
-//    ULONG bufferSize = 15000;
-//    IP_ADAPTER_ADDRESSES* adapterAddresses = (IP_ADAPTER_ADDRESSES*)malloc(bufferSize);
-//    if (GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, nullptr, adapterAddresses, &bufferSize) != NO_ERROR) {
-//        free(adapterAddresses);
-//        return "";
-//    }
-//
-//    IP_ADAPTER_ADDRESSES* adapter = adapterAddresses;
-//    while (adapter){
-//        // 判断是不是无线网卡，名字里一般带 Wi-Fi 或 Wireless
-//        if (adapter->IfType == IF_TYPE_IEEE80211) {
-//            IP_ADAPTER_UNICAST_ADDRESS* unicast = adapter->FirstUnicastAddress;
-//            while (unicast) {
-//                sockaddr_in* sa_in = (sockaddr_in*)unicast->Address.lpSockaddr;
-//                char ipStr[INET_ADDRSTRLEN];
-//                inet_ntop(AF_INET, &(sa_in->sin_addr), ipStr, sizeof(ipStr));
-//
-//                free(adapterAddresses);
-//                return std::string(ipStr); // 找到了就返回
-//            }
-//        }
-//        adapter = adapter->Next;
-//    }
-//
-//    free(adapterAddresses);
-//    return ""; // 没找到
-//}
-
-//std::string ServerGetWirelessIP() {
-//    ULONG bufferSize = 15000;
-//    IP_ADAPTER_ADDRESSES* adapterAddresses = (IP_ADAPTER_ADDRESSES*)malloc(bufferSize);
-//    if (GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, nullptr, adapterAddresses, &bufferSize) != NO_ERROR) {
-//        free(adapterAddresses);
-//        return "";
-//    }
-//
-//    IP_ADAPTER_ADDRESSES* adapter = adapterAddresses;
-//    while (adapter) {
-//        std::cout << "Adapter name: " << adapter->AdapterName << std::endl;
-//        // Check whether the adapter is connected to a network (exclude loopback or disconnected adapters)
-//        if (adapter->OperStatus == IfOperStatusUp) {
-//            IP_ADAPTER_UNICAST_ADDRESS* unicast = adapter->FirstUnicastAddress;
-//            while (unicast) {
-//                sockaddr_in* sa_in = (sockaddr_in*)unicast->Address.lpSockaddr;
-//                if (sa_in->sin_addr.s_addr != INADDR_ANY) {
-//                    char ipStr[INET_ADDRSTRLEN];
-//                    inet_ntop(AF_INET, &(sa_in->sin_addr), ipStr, sizeof(ipStr));
-//                    std::cout << "Found valid IP: " << ipStr << std::endl;
-//                    free(adapterAddresses);
-//                    return std::string(ipStr);
-//                }
-//                unicast = unicast->Next;
-//            }
-//        }
-//        adapter = adapter->Next;
-//    }
-//
-//    free(adapterAddresses);
-//    return ""; // 没有找到有效的 IP 地址
-//}
 
 std::string ServerGetWirelessIP() {
     ULONG bufferSize = 15000;
@@ -173,14 +112,23 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
         //处理discovery信息
         if (message.find("discovery") != std::string::npos) {
             std::cerr << "Receiver message: " << message << "from " << sender_ip << std::endl;
-            server->addClient(sender_ip, 8888, true);
+            server->online_manager->updateClient(sender_ip, 8888);
         }
         else if (message.find("offline") != std::string::npos) {
             std::cerr << "Receiver offfline message from " << sender_ip << "message :" << message << std::endl;
             auto it = server->client_map.find(sender_ip);
             if (it != server->client_map.end()) {
-                server->client_map.erase(it);
+                server->online_manager->removeClient(sender_ip);
             }
+
+        }
+
+        // 每次接收处理完一条消息后尝试进行清理
+        static auto last_cleanup = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_cleanup).count() > 10) {
+            server->online_manager->cleanupOfflineClients();
+            last_cleanup = now;
         }
     }
     closesocket(recv_socket);
@@ -188,7 +136,7 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
 }
 
 void Server::SetIP() {
-	Server::Ip = ServerGetWirelessIP();
+    Server::Ip = ServerGetWirelessIP();
     // 打印出获取到的 IP 地址
     std::cout << "Obtained Wireless IP: " << Server::Ip << std::endl;
     if (!Ip.empty()) {
@@ -207,6 +155,7 @@ Server::Server(){
     }
     SetIP();
     BOOL broad_cast = TRUE;
+    online_manager = new OnlineManager(client_map);
     if (setsockopt(this->server_socket, SOL_SOCKET, SO_BROADCAST, (char*)&broad_cast, sizeof(broad_cast)) == SOCKET_ERROR)
     {
         std::cerr << ("Error setting broadcast option: %d\n", WSAGetLastError()) << std::endl;
@@ -261,4 +210,5 @@ Server::~Server()
     if (this->server_socket != INVALID_SOCKET) {
         closesocket(this->server_socket);
     }
+    delete online_manager;
 }
