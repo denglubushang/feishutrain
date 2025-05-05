@@ -1,0 +1,13 @@
+# ninja log v5
+10	114	7677055435600167	build.ninja	a66ad3f0adc02b56
+19	526	7677054953276700	CMakeFiles/main.dir/main.cpp.obj	ec8172a13224ffe7
+12	529	7677054953316692	CMakeFiles/main.dir/udpbroadcast/client.cpp.obj	888454a66be8aabe
+16	621	7677054954226752	CMakeFiles/main.dir/udpbroadcast/server.cpp.obj	d0dc04efbd253da1
+623	821	7677054955664095	main.exe	10c7a764ba92149f
+14	423	7677054952256803	CMakeFiles/main.dir/udpbroadcast/online_manager.cpp.obj	6e3b6f953300f820
+13	102	7677055435600167	build.ninja	a66ad3f0adc02b56
+14	354	7677055439399367	CMakeFiles/main.dir/udpbroadcast/online_manager.cpp.obj	64835ca614a19f5e
+12	482	7677055440679426	CMakeFiles/main.dir/udpbroadcast/client.cpp.obj	e031a68acdeffa84
+20	488	7677055440749427	CMakeFiles/main.dir/main.cpp.obj	1fde212f5b25d1d
+16	580	7677055441659394	CMakeFiles/main.dir/udpbroadcast/server.cpp.obj	f4b71896658bec1a
+583	739	7677055442839795	main.exe	10c7a764ba92149f
