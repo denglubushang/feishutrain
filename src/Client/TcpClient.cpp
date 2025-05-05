@@ -20,7 +20,7 @@ TcpClient::~TcpClient() {
 void TcpClient::Controller() {
     std::cout << "客户端开始运行\n";
     std::cout << "以下是检测到的机器:\n";
-
+    //显示从广播模块检测到的机器
 
 
     std::cout << "输入你要操作的机器序号：\n";
@@ -34,7 +34,7 @@ void TcpClient::Controller() {
     std::cout << "选择要发送的文件序号：";
     int seq_file;
     std::cin >> seq_file;
-    SendFile("test.png");
+    SendFile(files[seq_file]);
 }
 
 void TcpClient::Connect(const char* tag_ip ) {
@@ -93,32 +93,48 @@ std::vector<std::string> TcpClient::GetFilesInDirectory() {
 }
 
 void TcpClient::SendFile(std::string tag_file_name) {
-    static char buffer[1024*1014];
-    int check_size = 1024 * 1024;
-    std::string header = tag_file_name + "\r\n";
+    HeadSegment head_segment;
     std::ifstream file(tag_file_name, std::ios::binary | std::ios::ate);
     if (!file) {
         std::cout << "文件打开失败";
     }
-    std::size_t fileSize = file.tellg();
+    std::uint64_t fileSize = file.tellg(),needsend_size=fileSize;
     file.seekg(0, std::ios::beg);
-    header += std::to_string(fileSize) + "\r\n";
-    size_t headneed_send_len = header.size(),head_sended_len=0;
-    while (head_sended_len < headneed_send_len) {
-        size_t send_len=send(client_Socket_, header.data() + head_sended_len, headneed_send_len - head_sended_len, 0);
-        head_sended_len += send_len;
+    int segment_num = (fileSize - 1) / (1024 * 511) + 1,segment_seq=0;
+    head_segment.Set_header(tag_file_name);
+    head_segment.Set_filesize(fileSize);
+    int headseg_size = sizeof(head_segment),haved_send=0;
+    while (haved_send<headseg_size) {
+        int temp= send(client_Socket_, reinterpret_cast<const char*>(&head_segment) + haved_send, headseg_size - haved_send, 0);
+        if (temp == SOCKET_ERROR) {
+            printf("send() failed: %d\n", WSAGetLastError());
+            closesocket(client_Socket_);
+            WSACleanup();
+            exit(1);
+        }
+        haved_send += temp;
     }
-    while (true) {
-        file.read(buffer, check_size);
+    DataSegment datasegment;
+    
+    while (segment_seq<segment_num) {
+        datasegment.init();
+        datasegment.Set_segid(segment_seq++);
+        file.read(datasegment.data.filedata, File_segdata_size);
         size_t byte_read = file.gcount();
-        while (1) {
-            size_t send_len = 0;
-            send_len += send(client_Socket_, buffer, byte_read, 0);
-            if (send_len == byte_read) {
-                break;
+        datasegment.Set_datasize(byte_read);
+        datasegment.Set_hash();
+        int data_segment_size = sizeof(DataSegment), sended_size = 0;
+        while (sended_size < data_segment_size) {
+            int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
+            if (temp == SOCKET_ERROR) {
+                printf("send() failed: %d\n", WSAGetLastError());
+                closesocket(client_Socket_);
+                WSACleanup();
+                exit(1);
             }
+            sended_size += temp;
         }
         if (file.eof()) break;
     }
-    std::cout << "发送完成";
+    std::cout << "文件发送完毕\n";
 }

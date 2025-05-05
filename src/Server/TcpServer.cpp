@@ -1,5 +1,5 @@
 #include "TcpServer.h"
-TcpServer::TcpServer(std::string s):password(s) {
+TcpServer::TcpServer(std::string s) :password(s) {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
         std::cerr << "WSAStartup failed." << std::endl;
@@ -38,11 +38,11 @@ TcpServer::~TcpServer() {
 }
 
 void TcpServer::Connect(SOCKET& accept_client_Socket_) {
-    memset(buffer,'\0', sizeof(buffer));
+    memset(buffer, '\0', sizeof(buffer));
     std::string rec_password;
     int buffer_len = 0;
     int state = 0;
-    while(1){
+    while (1) {
         buffer_len = recv(accept_client_Socket_, buffer, sizeof(buffer), 0);
         if (buffer_len == SOCKET_ERROR) {
             std::cerr << "Recv failed: " << WSAGetLastError() << std::endl;
@@ -69,8 +69,8 @@ void TcpServer::Receive(SOCKET& accept_client_Socket_) {
         std::cerr << "无法打开文件！" << std::endl;
         exit(1);
     }
-    size_t need_recve_byte = 0, received_byte=0;
-    std::string file_name,date_len;
+    size_t need_recve_byte = 0, received_byte = 0;
+    std::string file_name, date_len;
     static char buffer[1024 * 1024];
     while (1) {
         size_t need_dispose_byte_len = recv(accept_client_Socket_, buffer, sizeof(buffer), 0);
@@ -121,6 +121,61 @@ void TcpServer::Receive(SOCKET& accept_client_Socket_) {
     }
 }
 
+void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
+    std::ofstream file("test.txt", std::ios::binary);
+    int state = 0;
+    if (!file) {
+        std::cerr << "无法打开文件！" << std::endl;
+        exit(1);
+    }
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    const EVP_MD* md = EVP_md5();
+    unsigned int md_len = MD5_DIGEST_LENGTH;
+    size_t need_recve_byte = sizeof(HeadSegment), received_byte = 0;
+    std::string file_name, date_len;
+    HeadSegment fileinformation;
+    while (received_byte < need_recve_byte) {
+        int temp = recv(accept_client_Socket_, reinterpret_cast<char*>(&fileinformation) + received_byte, need_recve_byte - received_byte, 0);
+        if (temp == SOCKET_ERROR) {
+            std::cerr << "Recv failed: " << WSAGetLastError() << std::endl;
+            exit(1);
+        }
+        received_byte += temp;
+    }
+    std::cout << "开始接受文件 " << fileinformation.information.header << " 长度为： " << fileinformation.information.filesize << "\n";
+    need_recve_byte = fileinformation.information.filesize,received_byte=0;
+    DataSegment datasegment;
+    size_t dataseg_len = sizeof(DataSegment);
+    while (received_byte < need_recve_byte) {
+        size_t recved_seglen = 0;
+        while (recved_seglen < dataseg_len) {
+            int temp = recv(accept_client_Socket_, reinterpret_cast<char*>(&datasegment) + recved_seglen, dataseg_len - recved_seglen, 0);
+            if (temp == SOCKET_ERROR) {
+                std::cerr << "Recv failed: " << WSAGetLastError() << std::endl;
+                exit(1);
+            }
+            recved_seglen +=temp;
+        }
+        unsigned char output_hash[MD5_DIGEST_LENGTH];
+        // 初始化 MD5 计算
+        EVP_DigestInit_ex(ctx, md, NULL);
+        EVP_DigestUpdate(ctx, datasegment.data.filedata, static_cast<size_t>(datasegment.data.datasize));
+        EVP_DigestFinal_ex(ctx, output_hash, &md_len);
+
+        if (memcmp(output_hash, datasegment.data.hash, MD5_DIGEST_LENGTH) == 0) {
+            file.write(datasegment.data.filedata, datasegment.data.datasize);
+            received_byte += datasegment.data.datasize;
+        }
+        else {
+            std::cout << "数据损坏";
+            exit(1);
+        }
+    }
+    EVP_MD_CTX_free(ctx);
+    std::cout << "文件接收完毕\n";
+    file.close();
+}
+
 void TcpServer::EventListen() {
     sockaddr_in clientAddr;
     int clientAddrSize = sizeof(clientAddr);
@@ -136,7 +191,9 @@ void TcpServer::EventListen() {
         inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
         std::cout << "Client connected: " << clientIP << std::endl;
         Connect(client_Socket_);
-        Receive(client_Socket_);
+        Hash_Receive(client_Socket_);
     }
 
 }
+
+
