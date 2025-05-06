@@ -9,18 +9,11 @@
 class Client
 {
 private:
-    SOCKET client_socket;
-    static DWORD WINAPI ClientSendThread(LPVOID lpParam);
+    SOCKET client_socket_;
+    static DWORD WINAPI ClientBroadcastThread(LPVOID lpParam);
 
 public:
     Client();
     ~Client();
-    int ClientSendMsg(std::string target_ip, int target_port, std::string message);
-};
-
-struct SendParams {
-    Client* client;
-    std::string target_ip;
-    int target_port;
-    std::string message;
+    int ClientBroadcast();
 };
