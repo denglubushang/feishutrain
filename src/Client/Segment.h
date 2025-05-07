@@ -5,7 +5,7 @@
 #include <openssl/md5.h>
 #include <openssl/evp.h>
 #define File_segdata_size 1024*511
-
+#define PassMaxlen 10
 #pragma pack(push, 1) // 禁用内存对齐
 struct FileSeg {
 	uint64_t datasize;  // 文件数据的长度
@@ -15,7 +15,7 @@ struct FileSeg {
 };
 
 struct logSeg {
-	char password[1024];
+	char password[PassMaxlen];
 	void init();
 };
 

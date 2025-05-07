@@ -31,3 +31,8 @@ int DataSegment::Set_filedata()
 {
 	return 0;
 }
+
+void logSeg::init()
+{
+	memset(&password, '\0', PassMaxlen);
+}

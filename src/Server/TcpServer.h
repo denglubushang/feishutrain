@@ -4,6 +4,8 @@
 #include <string>
 #include <cstring>
 #include <functional>
+#include <filesystem>
+#include <set>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include "Segment.h"
@@ -27,5 +29,9 @@ public:
 	void Hash_Receive(SOCKET& accept_client_Socket_);
 	//事件监听循环
 	void EventListen();
+	//获取下载目录下有哪些文件
+	std::set<std::string> GetFilesInDirectory();
+		
+	void Change_Downlad_FileName(std::string recvfile_name);
 };
 

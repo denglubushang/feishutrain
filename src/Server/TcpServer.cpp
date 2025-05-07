@@ -38,20 +38,23 @@ TcpServer::~TcpServer() {
 }
 
 void TcpServer::Connect(SOCKET& accept_client_Socket_) {
-    memset(buffer, '\0', sizeof(buffer));
-    std::string rec_password;
-    int buffer_len = 0;
-    int state = 0;
+    logSeg recpassword;
     while (1) {
-        buffer_len = recv(accept_client_Socket_, buffer, sizeof(buffer), 0);
-        if (buffer_len == SOCKET_ERROR) {
-            std::cerr << "Recv failed: " << WSAGetLastError() << std::endl;
+        recpassword.init();
+        int recved_len = 0;
+        while (recved_len < PassMaxlen) {
+            int temp = recv(accept_client_Socket_, recpassword.password,PassMaxlen-recved_len , 0);
+            recved_len += temp;
+            if (temp == SOCKET_ERROR) {
+                std::cerr << "Recv failed: " << WSAGetLastError() << std::endl;
+            }
+            else if (temp == 0) {
+                std::cout << "Client disconnected." << std::endl;
+                exit(1);
+            }
         }
-        else if (buffer_len == 0) {
-            std::cout << "Client disconnected." << std::endl;
-            exit(1);
-        }
-        if (password.compare(0, password.size(), buffer, buffer_len) == 0) {
+        
+        if (password.compare(0, password.size(), recpassword.password, password.size()) == 0) {
             std::cout << "密码正确\n";
             send(accept_client_Socket_, "ok", strlen("ok"), 0);
             break;
@@ -122,7 +125,9 @@ void TcpServer::Receive(SOCKET& accept_client_Socket_) {
 }
 
 void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
-    std::ofstream file("test.txt", std::ios::binary);
+    std::filesystem::path dirpath="download";
+    std::filesystem::create_directory(dirpath);
+    std::ofstream file("download/temp.txt", std::ios::binary);
     int state = 0;
     if (!file) {
         std::cerr << "无法打开文件！" << std::endl;
@@ -132,7 +137,6 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     const EVP_MD* md = EVP_md5();
     unsigned int md_len = MD5_DIGEST_LENGTH;
     size_t need_recve_byte = sizeof(HeadSegment), received_byte = 0;
-    std::string file_name, date_len;
     HeadSegment fileinformation;
     while (received_byte < need_recve_byte) {
         int temp = recv(accept_client_Socket_, reinterpret_cast<char*>(&fileinformation) + received_byte, need_recve_byte - received_byte, 0);
@@ -142,6 +146,7 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
         }
         received_byte += temp;
     }
+    std::string filename(fileinformation.information.header);
     std::cout << "开始接受文件 " << fileinformation.information.header << " 长度为： " << fileinformation.information.filesize << "\n";
     need_recve_byte = fileinformation.information.filesize,received_byte=0;
     DataSegment datasegment;
@@ -174,6 +179,7 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     EVP_MD_CTX_free(ctx);
     std::cout << "文件接收完毕\n";
     file.close();
+    Change_Downlad_FileName(filename);
 }
 
 void TcpServer::EventListen() {
@@ -194,6 +200,23 @@ void TcpServer::EventListen() {
         Hash_Receive(client_Socket_);
     }
 
+}
+
+std::set<std::string> TcpServer::GetFilesInDirectory()
+{
+    std::set<std::string> files;
+
+    for (const auto& entry : std::filesystem::directory_iterator("download")) {
+        if (entry.is_regular_file()) {
+            files.insert(entry.path().filename().string());
+        }
+    }
+    return files;
+}
+
+void TcpServer::Change_Downlad_FileName(std::string recvfile_name)
+{
+    std::filesystem::rename("download/temp.txt", "download/" + recvfile_name);
 }
 
 

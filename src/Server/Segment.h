@@ -6,6 +6,7 @@
 #include <openssl/evp.h>
 #define FileNameBegin 0
 #define SeqNum 1024
+#define PassMaxlen 10
 #pragma pack(push, 1) // 禁用内存对齐
 struct FileSeg {
 	uint64_t datasize;  // 文件数据的长度
@@ -16,6 +17,7 @@ struct FileSeg {
 
 struct logSeg {
 	char password[1024];
+	void init();
 };
 
 struct FileInformation {

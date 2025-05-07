@@ -49,11 +49,38 @@ void TcpClient::Connect(const char* tag_ip ) {
         exit(1);
     }
     printf("Connected to server!\n");
-    std::string in_password;
+    logSeg in_password;
     while (1) {
-        std::cout << "输入密码：";
-        std::cin >> in_password;
-        int bytesSent = send(client_Socket_, in_password.c_str(), strlen(in_password.c_str()), 0);
+        in_password.init();
+        std::cout << "请输入密码不超过 " << PassMaxlen - 1 << " 个字符: ";
+        if (fgets(in_password.password, PassMaxlen, stdin) == nullptr) {
+            // 输入错误
+            std::cerr << "输入错误，请重新输入。" << std::endl;
+            continue;
+        }
+        size_t len = strlen(in_password.password);
+
+        // 检查是否包含换行符（表示未被截断）
+        if (len > 0 && in_password.password[len - 1] == '\n') {
+            in_password.password[len - 1] = '\0';  // 去除换行符
+            len--;
+        }
+        else {
+            // 输入被截断，提示错误并清空缓冲区
+            std::cout << "输入过长，请不要超过 " << PassMaxlen - 1 << " 个字符。\n";
+            // 清除缓冲区中剩余字符
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+            continue;
+        }
+
+        // 检查输入内容长度是否超过限制
+        if (len > PassMaxlen - 1) {
+            std::cout << "输入内容过长，请重新输入。\n";
+            continue;
+        }
+
+        int bytesSent = send(client_Socket_, in_password.password, PassMaxlen, 0);
         if (bytesSent == SOCKET_ERROR) {
             printf("send() failed: %d\n", WSAGetLastError());
             closesocket(client_Socket_);
@@ -73,9 +100,11 @@ void TcpClient::Connect(const char* tag_ip ) {
         }
         else if (bytesReceived == 0) {
             printf("Server closed the connection.\n");
+            break;
         }
         else {
             printf("recv() failed: %d\n", WSAGetLastError());
+            break;
         }
     }
 

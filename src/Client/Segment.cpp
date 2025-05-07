@@ -47,5 +47,5 @@ int DataSegment::Set_hash()
 
 void logSeg::init()
 {
-	memset(&password, '\0', sizeof(password));
+	memset(&password, '\0', PassMaxlen);
 }
