@@ -18,11 +18,12 @@ class Server
 private:
     SOCKET server_socket;
     std::string Ip;
+    std::string subnetMask;
     std::unordered_map<std::string, ClientInfo> client_map;
     HANDLE hReceiverThread;
     bool stop_thread = false;
 
-    void SetIP();
+    bool GetWirelessIP();
     void addClient(const std::string& ip, int port, bool is_online);
     static DWORD WINAPI ServerReceiverThread(LPVOID lpParam);
 
