@@ -9,7 +9,7 @@ int main()
     WSAStartup(MAKEWORD(2, 2), &wsaData);
 
 	Client client;
-    client.ClientSendMsg("255.255.255.255", 8888, "hello world"); // 广播上线消息
+    client.ClientBroadcast(8888);
     std::cout << "Press Enter to exit..." << std::endl;
     std::cin.get();
 	return 0;
