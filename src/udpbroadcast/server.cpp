@@ -157,13 +157,23 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
             std::cerr << "Receiver offfline message from " << sender_ip << "message :" << message << std::endl;
             auto it = server->client_map.find(sender_ip);
             if (it != server->client_map.end()) {
-                server->client_map.erase(it);
+                server->online_manager->removeClient(sender_ip);
             }
+
+        }
+
+        // 每次接收处理完一条消息后尝试进行清理
+        static auto last_cleanup = std::chrono::steady_clock::now();
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_cleanup).count() > 10) {
+            server->online_manager->cleanupOfflineClients();
+            last_cleanup = now;
         }
     }
     closesocket(recv_socket);
     return 0;
 }
+
 
 Server::Server() {
     // Create a socket
@@ -237,4 +247,5 @@ Server::~Server()
     if (this->server_socket != INVALID_SOCKET) {
         closesocket(this->server_socket);
     }
+    delete online_manager;
 }

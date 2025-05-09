@@ -3,9 +3,11 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <vector>
+#include <functional>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include "Segment.h"
 class TcpClient
 {
 public:
@@ -18,5 +20,6 @@ public:
 	void Connect(const char* tag_ip);
 	std::vector<std::string> GetFilesInDirectory();
 	void SendFile(std::string tag_file_name);
+
 };
 
