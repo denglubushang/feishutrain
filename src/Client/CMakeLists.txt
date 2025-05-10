@@ -22,10 +22,11 @@ set(SOURCES
     main.cpp
     TcpClient.cpp  # 需要你实现
     Segment.cpp    # 需要你实现
+    ProgressBar.cpp
 )
 
 # 创建可执行文件
-add_executable(${PROJECT_NAME} ${SOURCES} "ProgressBar.cpp")
+add_executable(${PROJECT_NAME} ${SOURCES})
 
 # 链接库
 target_link_libraries(${PROJECT_NAME}

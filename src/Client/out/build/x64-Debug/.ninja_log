@@ -1,6 +1,0 @@
-# ninja log v5
-1	650	7685681891073458	CMakeFiles/TcpClientApp.dir/main.cpp.obj	bd253db466b0d717
-1	703	7685687766120940	CMakeFiles/TcpClientApp.dir/TcpClient.cpp.obj	6514987522360d89
-11	324	7685687823819262	CMakeFiles/TcpClientApp.dir/Segment.cpp.obj	21b671e2689afd5c
-16	326	7685687823839299	CMakeFiles/TcpClientApp.dir/ProgressBar.cpp.obj	efec2651c2b26a2a
-326	719	7685687827222314	TcpClientApp.exe	69ee97ee6be4d488
