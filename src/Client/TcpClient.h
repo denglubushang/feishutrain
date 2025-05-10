@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include "Segment.h"
+#include "ProgressBar.h"
 class TcpClient
 {
 public:

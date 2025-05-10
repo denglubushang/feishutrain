@@ -11,7 +11,6 @@ include_directories(
     ${PROJECT_SOURCE_DIR}
     ${OPENSSL_INCLUDE_DIR}
 )
-
 # 查找 OpenSSL
 find_package(OpenSSL REQUIRED)
 if(NOT OPENSSL_FOUND)
@@ -26,7 +25,7 @@ set(SOURCES
 )
 
 # 创建可执行文件
-add_executable(${PROJECT_NAME} ${SOURCES})
+add_executable(${PROJECT_NAME} ${SOURCES} "ProgressBar.cpp")
 
 # 链接库
 target_link_libraries(${PROJECT_NAME}

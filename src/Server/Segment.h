@@ -1,22 +1,32 @@
 #pragma once
 #include <string.h>
 #include <cstdint>
-#include<string>
+#include <string>
+#include <iostream>
+#include <vector>
 #include <openssl/md5.h>
 #include <openssl/evp.h>
+#include <openssl/sha.h>  
 #define FileNameBegin 0
 #define SeqNum 1024
 #define PassMaxlen 10
+#define File_segdata_size 1024*511
 #pragma pack(push, 1) // 禁用内存对齐
+
+bool read_keys(std::vector<unsigned char>& aes_key, std::vector<unsigned char>& hmac_key);
+
+
 struct FileSeg {
 	uint64_t datasize;  // 文件数据的长度
 	uint64_t seg_id;	//文件块序号
-	unsigned char hash[MD5_DIGEST_LENGTH];//hash值
-	char filedata[1024 * 511];//文件数据
+	unsigned char hash[SHA256_DIGEST_LENGTH];//hash值，改为SHA256长度
+	unsigned char iv[12];        // AES-GCM初始化向量
+	unsigned char auth_tag[16];  // AES-GCM认证标签
+	char filedata[File_segdata_size];//文件数据
 };
 
 struct logSeg {
-	char password[1024];
+	char password[PassMaxlen];
 	void init();
 };
 
@@ -35,6 +45,7 @@ public:
 	int Set_datasize(uint64_t datsize);
 	int Set_hash();
 	int Set_filedata();
+	int Decrypt_data();  // 解密数据
 };
 class HeadSegment {
 public:

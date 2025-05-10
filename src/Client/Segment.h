@@ -2,15 +2,24 @@
 #include <string.h>
 #include <cstdint>
 #include<string>
-#include <openssl/md5.h>
+#include <fstream>
+#include <vector>
+#include <iostream>
 #include <openssl/evp.h>
+#include <openssl/sha.h>
+#include <openssl/rand.h>
+#include <openssl/buffer.h>
+#include <openssl/params.h>
+#include <openssl/core_names.h>
 #define File_segdata_size 1024*511
 #define PassMaxlen 10
 #pragma pack(push, 1) // 禁用内存对齐
 struct FileSeg {
 	uint64_t datasize;  // 文件数据的长度
 	uint64_t seg_id;	//文件块序号
-	unsigned char hash[MD5_DIGEST_LENGTH];//hash值
+	unsigned char hash[SHA256_DIGEST_LENGTH];//hash值，改为SHA256长度
+	unsigned char iv[12];        // AES-GCM初始化向量
+	unsigned char auth_tag[16];  // AES-GCM认证标签
 	char filedata[File_segdata_size];//文件数据
 };
 
@@ -33,7 +42,7 @@ public:
 	int Set_datasize(uint64_t datsize);
 	int Set_segid(uint64_t seq);
 	int Set_hash();
-
+	int Encrypt_data();  // 加密数据
 };
 class HeadSegment {
 public:

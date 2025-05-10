@@ -31,7 +31,11 @@ public:
 	void EventListen();
 	//获取下载目录下有哪些文件
 	std::set<std::string> GetFilesInDirectory();
-		
+	//将temp转为文件
 	void Change_Downlad_FileName(std::string recvfile_name);
+	//查看当前文件夹是否有传输文件名
+	bool fileExists(const std::string& filename);
+	// 生成新文件名，避免覆盖
+	std::string generateUniqueFileName(const std::string& fileName);
 };
 

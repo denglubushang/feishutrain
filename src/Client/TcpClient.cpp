@@ -123,6 +123,7 @@ std::vector<std::string> TcpClient::GetFilesInDirectory() {
 
 void TcpClient::SendFile(std::string tag_file_name) {
     HeadSegment head_segment;
+    ProgressBar progress_bar;
     std::ifstream file(tag_file_name, std::ios::binary | std::ios::ate);
     if (!file) {
         std::cout << "文件打开失败";
@@ -144,14 +145,15 @@ void TcpClient::SendFile(std::string tag_file_name) {
         haved_send += temp;
     }
     DataSegment datasegment;
-    
+    std::uint64_t sended_total_size = 0;
     while (segment_seq<segment_num) {
         datasegment.init();
         datasegment.Set_segid(segment_seq++);
         file.read(datasegment.data.filedata, File_segdata_size);
         size_t byte_read = file.gcount();
         datasegment.Set_datasize(byte_read);
-        datasegment.Set_hash();
+        datasegment.Encrypt_data();  // 加密数据
+        datasegment.Set_hash();      // 计算HMAC-SHA256哈希
         int data_segment_size = sizeof(DataSegment), sended_size = 0;
         while (sended_size < data_segment_size) {
             int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
@@ -161,9 +163,13 @@ void TcpClient::SendFile(std::string tag_file_name) {
                 WSACleanup();
                 exit(1);
             }
+            sended_total_size += temp;
+            progress_bar.update(sended_total_size, fileSize);
             sended_size += temp;
         }
         if (file.eof()) break;
     }
+    progress_bar.update(fileSize, fileSize);
+    progress_bar.finish(fileSize);
     std::cout << "文件发送完毕\n";
 }

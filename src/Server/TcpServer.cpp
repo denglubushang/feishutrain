@@ -124,18 +124,76 @@ void TcpServer::Receive(SOCKET& accept_client_Socket_) {
     }
 }
 
+std::string TcpServer::generateUniqueFileName(const std::string& original_filename) {
+    std::string base_name = original_filename;
+    std::string extension = "";
+
+    // 分离文件名和扩展名
+    size_t dot_pos = original_filename.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        base_name = original_filename.substr(0, dot_pos);
+        extension = original_filename.substr(dot_pos);
+    }
+
+    std::string unique_name = original_filename;
+    std::set<std::string> existing_files = GetFilesInDirectory(); // 这个函数已经获取download文件夹中的文件
+
+    int counter = 1;
+    while (existing_files.find(unique_name) != existing_files.end()) {
+        unique_name = base_name + "(" + std::to_string(counter) + ")" + extension;
+        counter++;
+    }
+
+    return unique_name;
+}
+
+std::vector<unsigned char> base64_decode(const std::string& input) {
+    BIO* bio, * b64;
+
+    int decodeLen = input.size();
+    std::vector<unsigned char> buffer(decodeLen);
+
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_new_mem_buf(input.c_str(), input.length());
+    bio = BIO_push(b64, bio);
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+
+    int len = BIO_read(bio, buffer.data(), decodeLen);
+    buffer.resize(len);
+
+    BIO_free_all(bio);
+    return buffer;
+}
+
+bool read_keys(std::vector<unsigned char>& aes_key, std::vector<unsigned char>& hmac_key) {
+    std::ifstream keyfile("key.txt");
+    if (!keyfile.is_open()) {
+        std::cout << "无法打开密钥文件" << std::endl;
+        return false;
+    }
+
+    std::string line;
+    while (std::getline(keyfile, line)) {
+        if (line.find("AES_KEY=") == 0) {
+            std::string key_b64 = line.substr(8); // 跳过"AES_KEY="
+            aes_key = base64_decode(key_b64);
+        }
+        else if (line.find("HMAC_KEY=") == 0) {
+            std::string key_b64 = line.substr(9); // 跳过"HMAC_KEY="
+            hmac_key = base64_decode(key_b64);
+        }
+    }
+
+    keyfile.close();
+    return (!aes_key.empty() && !hmac_key.empty());
+}
+
+
 void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     std::filesystem::path dirpath="download";
-    std::filesystem::create_directory(dirpath);
-    std::ofstream file("download/temp.txt", std::ios::binary);
-    int state = 0;
-    if (!file) {
-        std::cerr << "无法打开文件！" << std::endl;
-        exit(1);
+    if (!std::filesystem::exists(dirpath)) {
+        std::filesystem::create_directory(dirpath);
     }
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-    const EVP_MD* md = EVP_md5();
-    unsigned int md_len = MD5_DIGEST_LENGTH;
     size_t need_recve_byte = sizeof(HeadSegment), received_byte = 0;
     HeadSegment fileinformation;
     while (received_byte < need_recve_byte) {
@@ -147,38 +205,82 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
         received_byte += temp;
     }
     std::string filename(fileinformation.information.header);
-    std::cout << "开始接受文件 " << fileinformation.information.header << " 长度为： " << fileinformation.information.filesize << "\n";
-    need_recve_byte = fileinformation.information.filesize,received_byte=0;
-    DataSegment datasegment;
-    size_t dataseg_len = sizeof(DataSegment);
-    while (received_byte < need_recve_byte) {
-        size_t recved_seglen = 0;
-        while (recved_seglen < dataseg_len) {
-            int temp = recv(accept_client_Socket_, reinterpret_cast<char*>(&datasegment) + recved_seglen, dataseg_len - recved_seglen, 0);
-            if (temp == SOCKET_ERROR) {
-                std::cerr << "Recv failed: " << WSAGetLastError() << std::endl;
-                exit(1);
-            }
-            recved_seglen +=temp;
-        }
-        unsigned char output_hash[MD5_DIGEST_LENGTH];
-        // 初始化 MD5 计算
-        EVP_DigestInit_ex(ctx, md, NULL);
-        EVP_DigestUpdate(ctx, datasegment.data.filedata, static_cast<size_t>(datasegment.data.datasize));
-        EVP_DigestFinal_ex(ctx, output_hash, &md_len);
-
-        if (memcmp(output_hash, datasegment.data.hash, MD5_DIGEST_LENGTH) == 0) {
-            file.write(datasegment.data.filedata, datasegment.data.datasize);
-            received_byte += datasegment.data.datasize;
-        }
-        else {
-            std::cout << "数据损坏";
-            exit(1);
-        }
+    std::string down_file = "download/temp.txt";
+    std::ofstream file(down_file, std::ios::binary);
+    int state = 0;
+    if (!file) {
+        std::cerr << "无法打开文件！" << std::endl;
+        exit(1);
     }
-    EVP_MD_CTX_free(ctx);
-    std::cout << "文件接收完毕\n";
+    std::cout << "开始接受文件 " << filename << " 长度为： " << fileinformation.information.filesize << "\n";
+    uint64_t file_size = fileinformation.information.filesize;
+    int segment_num = (file_size - 1) / (1024 * 511) + 1;
+    uint64_t received_total_size = 0;
+    // 接收数据段
+    for (int i = 0; i < segment_num; i++) {
+        DataSegment data_segment;
+        int data_segment_size = sizeof(DataSegment);
+        int received_segment_size = 0;
+
+        while (received_segment_size < data_segment_size) {
+            int bytes_received = recv(accept_client_Socket_, reinterpret_cast<char*>(&data_segment) + received_segment_size, data_segment_size - received_segment_size, 0);
+            if (bytes_received <= 0) {
+                if (bytes_received == 0) {
+                    std::cout << "服务器关闭了连接。\n";
+                }
+                else {
+                    std::cout << "接收数据段失败: " << WSAGetLastError() << std::endl;
+                }
+                file.close();
+                return;
+            }
+            received_segment_size += bytes_received;
+        }
+
+        // 验证数据完整性
+        unsigned char calculated_hash[SHA256_DIGEST_LENGTH];
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        const EVP_MD* md = EVP_sha256();
+        unsigned int md_len = SHA256_DIGEST_LENGTH;
+
+        // 使用HMAC-SHA256验证数据完整性
+        std::vector<unsigned char> aes_key, hmac_key;
+        if (read_keys(aes_key, hmac_key)) {
+            EVP_MAC* mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+            EVP_MAC_CTX* mac_ctx = EVP_MAC_CTX_new(mac);
+
+            OSSL_PARAM params[2];
+            params[0] = OSSL_PARAM_construct_utf8_string("digest", const_cast<char*>("SHA256"), 0);
+            params[1] = OSSL_PARAM_construct_end();
+
+            EVP_MAC_init(mac_ctx, hmac_key.data(), hmac_key.size(), params);
+            EVP_MAC_update(mac_ctx, reinterpret_cast<const unsigned char*>(data_segment.data.filedata), static_cast<size_t>(data_segment.data.datasize));
+
+            size_t out_len = SHA256_DIGEST_LENGTH;
+            EVP_MAC_final(mac_ctx, calculated_hash, &out_len, SHA256_DIGEST_LENGTH);
+
+            EVP_MAC_CTX_free(mac_ctx);
+            EVP_MAC_free(mac);
+
+            if (memcmp(calculated_hash, data_segment.data.hash, SHA256_DIGEST_LENGTH) != 0) {
+                std::cout << "数据段 " << i << " 哈希验证失败，数据可能已损坏。\n";
+                // 可以选择继续或中断
+            }
+        }
+
+        // 如果数据是加密的，需要解密
+        if (data_segment.Decrypt_data() != 0) {
+            std::cout << "数据段 " << i << " 解密失败。\n";
+            // 可以选择继续或中断
+        }
+
+        // 写入文件
+        file.write(data_segment.data.filedata, data_segment.data.datasize);
+        received_total_size += data_segment.data.datasize;
+    }
+
     file.close();
+    std::cout << "文件接收完毕\n";
     Change_Downlad_FileName(filename);
 }
 
@@ -216,7 +318,16 @@ std::set<std::string> TcpServer::GetFilesInDirectory()
 
 void TcpServer::Change_Downlad_FileName(std::string recvfile_name)
 {
-    std::filesystem::rename("download/temp.txt", "download/" + recvfile_name);
+    std::cout << "文件名为" << recvfile_name << std::endl;
+    std::string unique_filename = generateUniqueFileName(recvfile_name);
+
+    try {
+        std::filesystem::rename("download/temp.txt", "download/" + unique_filename);
+        std::cout << "文件已保存为: " << unique_filename << std::endl;
+    }
+    catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "重命名失败: " << e.what() << std::endl;
+    }
 }
 
 
