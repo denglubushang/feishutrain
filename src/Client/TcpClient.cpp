@@ -178,7 +178,7 @@ void TcpClient::SendFile(std::string tag_file_name) {
             break;
         }
     }
-    progress_bar.update(fileSize, fileSize);
+    //progress_bar.update(fileSize, fileSize);
     progress_bar.finish(fileSize);
     std::cout << "文件发送完毕\n";
 }
