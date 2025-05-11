@@ -9,6 +9,8 @@
 #include <string>
 #include "Segment.h"
 #include "ProgressBar.h"
+#include "udp_client.h"
+#include "udp_server.h"
 class TcpClient
 {
 public:

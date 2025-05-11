@@ -21,12 +21,17 @@ void TcpClient::Controller() {
     std::cout << "客户端开始运行\n";
     std::cout << "以下是检测到的机器:\n";
     //显示从广播模块检测到的机器
-
+    Server server;
+    Client client;
+    server.StartReceiverThread();
+    client.ClientBroadcast(8888);
 
     std::cout << "输入你要操作的机器序号：\n";
-    int seq;
-    std::cin >> seq;
-    Connect("127.0.0.1");
+    std::string server_ip;
+    std::cin >> server_ip;
+    server.StopReceiverThread();
+
+    Connect(server_ip.c_str());
     std::vector<std::string> files = GetFilesInDirectory();
     for (int i = 0;i < files.size();i++) {
         std::cout << i << ": " << files[i]<<"\n";
@@ -167,7 +172,11 @@ void TcpClient::SendFile(std::string tag_file_name) {
             progress_bar.update(sended_total_size, fileSize);
             sended_size += temp;
         }
-        if (file.eof()) break;
+        if (file.eof()) 
+        {
+            Sleep(100);
+            break;
+        }
     }
     progress_bar.update(fileSize, fileSize);
     progress_bar.finish(fileSize);

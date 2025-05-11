@@ -23,6 +23,9 @@ set(SOURCES
     TcpClient.cpp  # 需要你实现
     Segment.cpp    # 需要你实现
     ProgressBar.cpp
+    udp_client.cpp
+    udp_server.cpp
+    online_manager.cpp
 )
 
 # 创建可执行文件
