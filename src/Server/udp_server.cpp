@@ -66,7 +66,11 @@ bool Server::GetWirelessIP() {
     free(pAddresses);
     return false;  // 获取失败
 }
-
+void Server::close() {
+    if (this->server_socket != INVALID_SOCKET) {
+        closesocket(this->server_socket);
+    }
+}
 void Server::addClient(const std::string& ip, int port, bool is_online) {
     auto it = client_map.find(ip);
     if (it != client_map.end()) {
@@ -143,15 +147,15 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
         }
         std::string sender_ip(ip_str);
         // 输出接收到的信息和发送者的 IP 地址
-        std::cout << "Received message: '" << message << "' from Client: " << sender_ip << std::endl;
+        //std::cout << "Received message: '" << message << "' from Client: " << sender_ip << std::endl;
         if (sender_ip == server->Ip) {
             continue;
         }
         //处理discovery信息
         if (message.find("discovery") != std::string::npos) {
-            std::cerr << "Receiver message: " << message << "from " << sender_ip << std::endl;
+            //std::cerr << "Receiver message: " << message << "from " << sender_ip << std::endl;
             server->addClient(sender_ip, 8888, true);
-            std::cout << "Client " << sender_ip << " is online" << std::endl;  // 这里输出测试信息
+            //std::cout << "Client " << sender_ip << " is online" << std::endl;  // 这里输出测试信息
         }
         else if (message.find("offline") != std::string::npos) {
             std::cerr << "Receiver offfline message from " << sender_ip << "message :" << message << std::endl;
@@ -182,6 +186,7 @@ Server::Server() {
         std::cerr << ("Error creating socket: %d\n", WSAGetLastError()) << std::endl;
     }
     GetWirelessIP();
+    std::cout<<"Server IP: "<<Ip<<std::endl;
     BOOL broad_cast = TRUE;
     if (setsockopt(this->server_socket, SOL_SOCKET, SO_BROADCAST, (char*)&broad_cast, sizeof(broad_cast)) == SOCKET_ERROR) {
         std::cerr << ("Error setting broadcast option: %d\n", WSAGetLastError()) << std::endl;

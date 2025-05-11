@@ -20,6 +20,7 @@ private:
 public:
     Client();
     ~Client();
+    void close();
     int ClientBroadcast(int target_port);
 };
 

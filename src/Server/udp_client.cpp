@@ -80,7 +80,12 @@ DWORD WINAPI Client::ClientBroadcastThread(LPVOID lpParam)
     delete params;
     return 0;
 }
-
+void Client::close() {
+    if (this->client_socket_ != INVALID_SOCKET)
+    {
+        closesocket(this->client_socket_);
+    }
+}
 Client::Client()
 {
     // Create a socket

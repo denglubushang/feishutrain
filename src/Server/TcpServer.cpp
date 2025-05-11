@@ -226,9 +226,11 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
             int bytes_received = recv(accept_client_Socket_, reinterpret_cast<char*>(&data_segment) + received_segment_size, data_segment_size - received_segment_size, 0);
             if (bytes_received <= 0) {
                 if (bytes_received == 0) {
+                    
                     std::cout << "服务器关闭了连接。\n";
                 }
                 else {
+                    std::cout << "在第" << i << "个数据段时，服务器关闭了连接。\n";
                     std::cout << "接收数据段失败: " << WSAGetLastError() << std::endl;
                 }
                 file.close();

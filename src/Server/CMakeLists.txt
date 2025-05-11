@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# 包含系统头文件
+include_directories(
+    ${PROJECT_SOURCE_DIR}
+    ${OPENSSL_INCLUDE_DIR}
+)
+
 # 查找 OpenSSL（通过 vcpkg 提供）
 find_package(OpenSSL REQUIRED)
 if(NOT OPENSSL_FOUND)
@@ -17,10 +23,20 @@ set(SOURCES
     main.cpp          # 包含 main() 的文件
     TcpServer.cpp     # TcpServer 类实现
     Segment.cpp       # DataSegment 和 HeadSegment 实现
+    udp_client.cpp
+    udp_server.cpp
+    online_manager.cpp
 )
 
-# 创建可执行文件
-add_executable(${PROJECT_NAME} ${SOURCES})
+# 创建可执行文件 - 直接指定源文件而不使用变量
+add_executable(TcpServerApp 
+    main.cpp
+    TcpServer.cpp
+    Segment.cpp
+    udp_client.cpp
+    udp_server.cpp
+    online_manager.cpp
+)
 
 # 包含头文件路径
 include_directories(

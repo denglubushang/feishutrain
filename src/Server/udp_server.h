@@ -32,6 +32,7 @@ private:
 public:
     Server();
     ~Server();
+    void close();
     int StartReceiverThread();
     int StopReceiverThread();
     int SendOfflineMessage();
