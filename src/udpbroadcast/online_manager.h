@@ -8,7 +8,7 @@ struct ClientInfo {
     std::string ip_address;
     int port;
     bool is_online;
-    std::chrono::steady_clock::time_point last_seen;  // 新增字段
+    std::chrono::steady_clock::time_point last_seen;
 };
 
 class OnlineManager {
@@ -20,8 +20,8 @@ private:
 public:
     OnlineManager(std::unordered_map<std::string, ClientInfo>& map);
 
-    void updateClient(const std::string& ip, int port);
+    void addOrUpdateClient(const std::string& ip, int port, bool is_online);
     void removeClient(const std::string& ip);
     void cleanupOfflineClients();
-    void printOnlineClients();  // 可选：调试用
+    void printOnlineClients();
 };

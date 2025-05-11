@@ -150,7 +150,8 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
         //处理discovery信息
         if (message.find("discovery") != std::string::npos) {
             std::cerr << "Receiver message: " << message << "from " << sender_ip << std::endl;
-            server->addClient(sender_ip, 8888, true);
+//            server->addClient(sender_ip, 8888, true);
+            server->online_manager->addOrUpdateClient(sender_ip, 8888, true);
             std::cout << "Client " << sender_ip << " is online" << std::endl;  // 这里输出测试信息
         }
         else if (message.find("offline") != std::string::npos) {

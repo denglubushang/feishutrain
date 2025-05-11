@@ -3,10 +3,17 @@
 
 OnlineManager::OnlineManager(std::unordered_map<std::string, ClientInfo>& map) : client_map(map) {}
 
-void OnlineManager::updateClient(const std::string& ip, int port) {
+void OnlineManager::addOrUpdateClient(const std::string& ip, int port, bool is_online) {
     std::lock_guard<std::mutex> lock(map_mutex);
     auto now = std::chrono::steady_clock::now();
-    client_map[ip] = ClientInfo{ ip, port, true, now };
+    auto it = client_map.find(ip);
+    if (it != client_map.end()) {
+        it->second.last_seen = now;
+        it->second.port = port;
+        it->second.is_online = is_online;
+    } else {
+        client_map[ip] = ClientInfo{ ip, port, is_online, now };
+    }
 }
 
 void OnlineManager::removeClient(const std::string& ip) {
@@ -30,7 +37,10 @@ void OnlineManager::cleanupOfflineClients() {
 
 void OnlineManager::printOnlineClients() {
     std::lock_guard<std::mutex> lock(map_mutex);
-    for (std::unordered_map<std::string, ClientInfo>::const_iterator it = client_map.begin(); it != client_map.end(); ++it) {
-        std::cout << "Client IP: " << it->first << ", Port: " << it->second.port << std::endl;
+    auto now = std::chrono::steady_clock::now();
+    for (const auto& [ip, info] : client_map) {
+        auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now - info.last_seen).count();
+        std::cout << "Client IP: " << ip << ", Port: " << info.port
+                  << ", Last seen: " << seconds << " seconds ago" << std::endl;
     }
 }
