@@ -25,6 +25,8 @@ public:
 	void Connect(SOCKET& accept_client_Socket_);
 	//接受文件传输过程
 	void Receive(SOCKET& accept_client_Socket_);
+	//断点续传接收文件
+	int Hash_Receive_Resume(SOCKET client_sock, const std::string& filename);
 	//接受文件传输过程
 	void Hash_Receive(SOCKET& accept_client_Socket_);
 	//事件监听循环

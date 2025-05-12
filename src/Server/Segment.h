@@ -31,6 +31,7 @@ struct logSeg {
 };
 
 struct FileInformation {
+	bool is_continue = false;     //续传标识,默认否
 	char header[1024];    // 文件名
 	uint64_t filesize;  // 文件数据的长度
 };

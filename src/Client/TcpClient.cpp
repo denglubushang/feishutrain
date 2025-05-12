@@ -39,7 +39,16 @@ void TcpClient::Controller() {
     std::cout << "选择要发送的文件序号：";
     int seq_file;
     std::cin >> seq_file;
-    SendFile(files[seq_file]);
+    std::cout << "是否是续传：y/n" << std::endl;
+    char tag_continue;
+    std::cin >> tag_continue;
+    if (tag_continue == 'y') {
+        Send_continue(files[seq_file]);
+    }
+    else
+    {
+        SendFile(files[seq_file]);
+    }
 }
 
 void TcpClient::Connect(const char* tag_ip ) {
@@ -125,6 +134,102 @@ std::vector<std::string> TcpClient::GetFilesInDirectory() {
     }
     return files;
 }
+
+void TcpClient::Send_continue(std::string tag_file_name) {
+    std::cout << "续传文件\n";
+    HeadSegment head_segment;
+    ProgressBar progress_bar;
+    std::ifstream file(tag_file_name, std::ios::binary | std::ios::ate);
+    if (!file) {
+        std::cerr << "文件打开失败\n";
+        return;
+    }
+    std::uint64_t fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);  // 初始化到文件头
+
+    // 设置续传请求头
+    head_segment.Set_header(tag_file_name);
+    head_segment.Set_filesize(fileSize);
+    head_segment.Set_Boolean(true);
+
+    // 发送请求头（确保完整发送）
+    int headseg_size = sizeof(head_segment);
+    int haved_send = 0;
+    while (haved_send < headseg_size) {
+        int temp = send(client_Socket_, reinterpret_cast<const char*>(&head_segment) + haved_send, headseg_size - haved_send, 0);
+        if (temp == SOCKET_ERROR) {
+            std::cerr << "send() failed: " << WSAGetLastError() << std::endl;
+            closesocket(client_Socket_);
+            WSACleanup();
+            exit(1);
+        }
+        haved_send += temp;
+    }
+    std::cout << "发送续传请求头完成" << head_segment.information.is_continue << "\n";
+
+    // 接收起始块号（确保完整接收）
+    int start_chunk = 0;
+    int received = 0;
+    while (received < sizeof(int)) {
+        int bytes = recv(client_Socket_, reinterpret_cast<char*>(&start_chunk) + received, sizeof(int) - received, 0);
+        if (bytes <= 0) {
+            std::cerr << "接收块号失败\n";
+            closesocket(client_Socket_);
+            exit(1);
+        }
+        received += bytes;
+    }
+    std::cout << "续传文件块号：" << start_chunk << "\n";
+
+    // 调整文件读取位置
+    file.seekg(start_chunk * File_segdata_size, std::ios::beg);
+    int segment_num = (fileSize - 1) / File_segdata_size + 1;
+    int segment_seq = start_chunk + 1;  // 直接使用服务端返回的块号
+
+    DataSegment datasegment;
+    std::uint64_t sended_total_size = start_chunk * File_segdata_size;
+
+    while (segment_seq < segment_num && file) {
+        datasegment.init();
+        datasegment.Set_segid(segment_seq++);
+        file.read(datasegment.data.filedata, File_segdata_size);
+        size_t byte_read = file.gcount();
+        if (byte_read == 0) break;
+
+        datasegment.Set_datasize(byte_read);
+        datasegment.Encrypt_data();
+        datasegment.Set_hash();
+
+        // 发送数据段（确保完整发送）
+        int data_segment_size = sizeof(DataSegment);
+        int sended_size = 0;
+        while (sended_size < data_segment_size) {
+            int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
+            if (temp == SOCKET_ERROR) {
+                std::cerr << "send() failed: " << WSAGetLastError() << std::endl;
+                closesocket(client_Socket_);
+                WSACleanup();
+                exit(1);
+            }
+            sended_size += temp;
+        }
+        if (file.eof())
+        {
+            Sleep(100);
+            break;
+        }
+
+        // 更新进度（基于实际文件数据量）
+        sended_total_size += byte_read;
+        progress_bar.update(sended_total_size, fileSize);
+    }
+
+    // 最终状态更新
+    progress_bar.update(fileSize, fileSize);
+    progress_bar.finish(fileSize);
+    std::cout << "文件发送完毕\n";
+}
+
 
 void TcpClient::SendFile(std::string tag_file_name) {
     HeadSegment head_segment;

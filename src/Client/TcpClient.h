@@ -22,6 +22,7 @@ public:
 	void Controller();
 	void Connect(const char* tag_ip);
 	std::vector<std::string> GetFilesInDirectory();
+	void Send_continue(std::string tag_file_name);
 	void SendFile(std::string tag_file_name);
 
 };
