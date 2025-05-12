@@ -215,8 +215,28 @@ void TcpClient::Send_continue(std::string tag_file_name) {
         }
         if (file.eof())
         {
-            Sleep(100);
-            break;
+            //Sleep(100);    改写成接收确认信息
+            int received = 0;
+            std::string TransConfirm = "NO";
+            while (received < sizeof(std::string)) {
+                int bytes = recv(client_Socket_, reinterpret_cast<char*>(&TransConfirm) + received, sizeof(std::string) - received, 0);
+                if (bytes <= 0) {
+                    std::cerr << "接收块号失败\n";
+                    closesocket(client_Socket_);
+                    exit(1);
+                }
+                received += bytes;
+            }
+            if (TransConfirm == "ok")
+            {
+                std::cout << TransConfirm << " " << "文件传输成功\n";
+                break;
+            }
+            else {
+                std::cout << "文件传输未成功，需要重传\n";
+                return;
+            }
+
         }
 
         // 更新进度（基于实际文件数据量）
@@ -277,10 +297,30 @@ void TcpClient::SendFile(std::string tag_file_name) {
             progress_bar.update(sended_total_size, fileSize);
             sended_size += temp;
         }
-        if (file.eof()) 
+        if (file.eof())
         {
-            Sleep(100);
-            break;
+            //Sleep(100);    改写成接收确认信息
+            int received = 0;
+            std::string TransConfirm = "NO";
+            while (received < sizeof(std::string)) {
+                int bytes = recv(client_Socket_, reinterpret_cast<char*>(&TransConfirm) + received, sizeof(std::string) - received, 0);
+                if (bytes <= 0) {
+                    std::cerr << "接收块号失败\n";
+                    closesocket(client_Socket_);
+                    exit(1);
+                }
+                received += bytes;
+            }
+            if (TransConfirm == "ok")
+            {
+                std::cout << TransConfirm << " " << "文件传输成功\n";
+                break;
+            }
+            else {
+                std::cout << "文件传输未成功，需要重传\n";
+                return;
+            }
+
         }
     }
     //progress_bar.update(fileSize, fileSize);

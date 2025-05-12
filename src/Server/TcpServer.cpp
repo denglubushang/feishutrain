@@ -346,6 +346,20 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
 
     file.close();
     std::cout << "文件接收完毕\n";
+    //这里需要给客户端发送一个完成的信息
+    int sent_bytes = 0;
+    std::string TransConfirm = "ok";
+    while (sent_bytes < sizeof(std::string)) {
+        int bytes = send(accept_client_Socket_,
+            reinterpret_cast<const char*>(&TransConfirm) + sent_bytes,
+            sizeof(std::string) - sent_bytes, 0);
+        if (bytes <= 0) {
+            std::cerr << "起始块发送失败\n";
+            return;
+        }
+        sent_bytes += bytes;
+    }
+
     Change_Downlad_FileName(filename);
 }
 
