@@ -280,7 +280,7 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     }
     std::cout << "开始接受文件 " << filename << " 长度为： " << fileinformation.information.filesize << "\n";
     // 接收数据段
-    for (int i = 0; i < segment_num; i++) {
+    for (int i = state; i < segment_num; i++) {
         DataSegment data_segment;
         int data_segment_size = sizeof(DataSegment);
         int received_segment_size = 0;
