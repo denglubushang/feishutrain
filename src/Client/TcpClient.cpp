@@ -213,25 +213,48 @@ void TcpClient::Send_continue(std::string tag_file_name) {
                 WSACleanup();
                 exit(1);
             }
-            
             sended_size += temp;
         }
 
         if (file.eof())
         {
-            
+            Sleep(100);
             break;
         }
 
+        }
         // 更新进度（基于实际文件数据量）
-        sended_total_size += byte_read;
-        progress_bar.update(sended_total_size, fileSize);
+        
+    }
+    int received = 0;
+    std::string TransConfirm = "NO";
+    while (received < sizeof(std::string)) {
+        int bytes = recv(client_Socket_, reinterpret_cast<char*>(&TransConfirm) + received, sizeof(std::string) - received, 0);
+        if (bytes <= 0) {
+            std::cerr << "接收块号失败\n";
+            closesocket(client_Socket_);
+            exit(1);
+        }
+        received += bytes;
+    }
+    if (TransConfirm == "ok")
+    {
+        std::cout << TransConfirm << " " << "文件传输成功\n";
+    }
+    else {
+        std::cout << "文件传输未成功，需要重传\n";
+        char ch;
+        std::cout << "是否重传(y/n):";
+        std::cin >> ch;
+        if (ch == 'y')
+        {
+            Send_continue(tag_file_name);
+        }
     }
     Sleep(1000);
     // 最终状态更新
     progress_bar.update(fileSize, fileSize);
     progress_bar.finish(fileSize);
-    
     std::cout << "文件发送完毕\n";
 }
 
@@ -285,14 +308,44 @@ void TcpClient::SendFile(std::string tag_file_name) {
             progress_bar.update(sended_total_size, fileSize);
             sended_size += temp;
         }
-        if (file.eof()) 
+        if (file.eof())
         {
-            std::cout << "文件走到头了\n";
+            Sleep(100);
             break;
+
         }
     }
+    int received = 0;
+    std::string TransConfirm = "NO";
+    while (received < sizeof(std::string)) {
+        int bytes = recv(client_Socket_, reinterpret_cast<char*>(&TransConfirm) + received, sizeof(std::string) - received, 0);
+        if (bytes <= 0) {
+            std::cerr << "接收块号失败\n";
+            closesocket(client_Socket_);
+            exit(1);
+        }
+        received += bytes;
+    }
+    if (TransConfirm == "ok")
+    {
+        std::cout << TransConfirm << " " << "文件传输成功\n";
+    }
+    else {
+        std::cout << "文件传输未成功，需要重传\n";
+        char ch;
+        std::cout<<"是否重传(y/n):";
+        std::cin>>ch;
+        if (ch=='y')
+        {
+            Send_continue(tag_file_name);
+            return;
+        }else {
+            std::cout << "文件发送未成功\n";
+            return;
+        }
+       
+    }
     //progress_bar.update(fileSize, fileSize);
-    Sleep(1000);
     progress_bar.finish(fileSize);
     std::cout << "文件发送完毕\n";
 }
