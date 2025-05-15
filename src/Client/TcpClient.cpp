@@ -203,19 +203,23 @@ void TcpClient::Send_continue(std::string tag_file_name) {
         // 发送数据段（确保完整发送）
         int data_segment_size = sizeof(DataSegment);
         int sended_size = 0;
+  
         while (sended_size < data_segment_size) {
             int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
+            std::cout << "文件传了" << temp << std::endl;
             if (temp == SOCKET_ERROR) {
                 std::cerr << "send() failed: " << WSAGetLastError() << std::endl;
                 closesocket(client_Socket_);
                 WSACleanup();
                 exit(1);
             }
+            
             sended_size += temp;
         }
+
         if (file.eof())
         {
-            Sleep(100);
+            
             break;
         }
 
@@ -223,10 +227,11 @@ void TcpClient::Send_continue(std::string tag_file_name) {
         sended_total_size += byte_read;
         progress_bar.update(sended_total_size, fileSize);
     }
-
+    Sleep(1000);
     // 最终状态更新
     progress_bar.update(fileSize, fileSize);
     progress_bar.finish(fileSize);
+    
     std::cout << "文件发送完毕\n";
 }
 
@@ -267,6 +272,9 @@ void TcpClient::SendFile(std::string tag_file_name) {
         int data_segment_size = sizeof(DataSegment), sended_size = 0;
         while (sended_size < data_segment_size) {
             int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
+            std::cout << "data_segment_size: " << data_segment_size << std::endl;
+            std::cout << "sended_size: " << sended_size << std::endl;
+            std::cout << "temp: " << temp << std::endl;
             if (temp == SOCKET_ERROR) {
                 printf("send() failed: %d\n", WSAGetLastError());
                 closesocket(client_Socket_);
@@ -279,11 +287,12 @@ void TcpClient::SendFile(std::string tag_file_name) {
         }
         if (file.eof()) 
         {
-            Sleep(100);
+            std::cout << "文件走到头了\n";
             break;
         }
     }
     //progress_bar.update(fileSize, fileSize);
+    Sleep(1000);
     progress_bar.finish(fileSize);
     std::cout << "文件发送完毕\n";
 }

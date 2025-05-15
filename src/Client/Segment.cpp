@@ -4,6 +4,10 @@ void HeadSegment::init()
 	memset(&information, '\0', sizeof(information));
 }
 
+void HeadSegment::Set_Boolean(bool is_continue) {
+	information.is_continue = is_continue;
+}
+
 int HeadSegment::Set_header(std::string filename)
 {
 	strcpy_s(information.header, filename.c_str());
