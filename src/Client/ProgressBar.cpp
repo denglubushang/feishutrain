@@ -63,11 +63,22 @@ void ProgressBar::update(size_t current, size_t total) {
 		}
 	}
 	std::cout << "]" << std::fixed << std::setprecision(1) << progress << "%    "
-		<< speed_str << "   ";
+		<< speed_str << "                      \r";
 	std::cout.flush();
 
 	last_time_ = now;
 	last_bytes_ = current;
+}
+
+void ProgressBar::reset(size_t current_bytes) {
+	last_time_ = std::chrono::steady_clock::now();
+	last_bytes_ = current_bytes;
+}
+
+void ProgressBar::start(size_t current_bytes ) {
+	start_time_ = std::chrono::steady_clock::now();
+	last_time_ = start_time_;
+	last_bytes_ = current_bytes;
 }
 
 void ProgressBar::finish(size_t total) {

@@ -10,7 +10,7 @@
 #define FileNameBegin 0
 #define SeqNum 1024
 #define PassMaxlen 10
-#define File_segdata_size 1024*511
+#define File_segdata_size 1024*64
 #pragma pack(push, 1) // ½ûÓÃÄÚ´æ¶ÔÆë
 
 bool read_keys(std::vector<unsigned char>& aes_key, std::vector<unsigned char>& hmac_key);

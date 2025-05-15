@@ -36,4 +36,5 @@ public:
     int StartReceiverThread();
     int StopReceiverThread();
     int SendOfflineMessage();
+
 };

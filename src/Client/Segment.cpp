@@ -14,6 +14,8 @@ int HeadSegment::Set_header(std::string filename)
 	return 0;
 }
 
+
+
 int HeadSegment::Set_filesize(uint64_t size)
 {
 	information.filesize = size;

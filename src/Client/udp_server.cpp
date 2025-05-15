@@ -255,5 +255,5 @@ Server::~Server()
     if (this->server_socket != INVALID_SOCKET) {
         closesocket(this->server_socket);
     }
-    delete online_manager;
+    //delete online_manager;
 }

@@ -4,6 +4,7 @@
 #include "udp_client.h"
 #include "udp_server.h"
 #pragma comment(lib, "Ws2_32.lib")
+#pragma pack(push, 1)
 int main() {
 	std::ifstream passfile("password.txt");
 	if (!passfile) {

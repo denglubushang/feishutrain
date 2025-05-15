@@ -8,6 +8,7 @@
 #include"TcpClient.h"
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
+#pragma pack(push, 1)
 
 int main() {
 	TcpClient myclient;

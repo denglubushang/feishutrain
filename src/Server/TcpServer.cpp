@@ -65,64 +65,6 @@ void TcpServer::Connect(SOCKET& accept_client_Socket_) {
     }
 }
 
-void TcpServer::Receive(SOCKET& accept_client_Socket_) {
-    std::ofstream file("test.txt", std::ios::binary);
-    int state = 0;
-    if (!file) {
-        std::cerr << "无法打开文件！" << std::endl;
-        exit(1);
-    }
-    size_t need_recve_byte = 0, received_byte = 0;
-    std::string file_name, date_len;
-    static char buffer[1024 * 1024];
-    while (1) {
-        size_t need_dispose_byte_len = recv(accept_client_Socket_, buffer, sizeof(buffer), 0);
-        size_t disposed_byte_len = 0;
-        if (state == 0) {
-            for (; disposed_byte_len < need_dispose_byte_len;disposed_byte_len++) {
-                if (buffer[disposed_byte_len] != '\n') {
-                    file_name += buffer[disposed_byte_len];
-                }
-                else {
-                    if (file_name[file_name.size() - 1] == '\r') {
-                        state = 1;
-                        //文件名暂未处理
-                        disposed_byte_len++;
-                        break;
-                    }
-                }
-            }
-        }
-        if (state == 1) {
-            for (; disposed_byte_len < need_dispose_byte_len;disposed_byte_len++) {
-                if (buffer[disposed_byte_len] != '\n') {
-                    date_len += buffer[disposed_byte_len];
-                }
-                else {
-                    if (file_name[file_name.size() - 1] == '\r') {
-                        state = 2;
-                        disposed_byte_len++;
-                        need_recve_byte = std::stoul(date_len);
-                        break;
-                    }
-                }
-            }
-        }
-        if (state == 2) {
-            file.write(buffer + disposed_byte_len, need_dispose_byte_len - disposed_byte_len);
-            received_byte += need_dispose_byte_len - disposed_byte_len;
-            disposed_byte_len = need_dispose_byte_len;
-            if (!file.good()) {
-                std::cerr << "写入失败";
-            }
-        }
-        if (received_byte == need_recve_byte) {
-            std::cout << "文件接收完毕";
-            break;
-        }
-
-    }
-}
 
 std::string TcpServer::generateUniqueFileName(const std::string& original_filename) {
     std::string base_name = original_filename;
@@ -197,7 +139,7 @@ int TcpServer::Hash_Receive_Resume(SOCKET client_sock, const std::string& filena
         if (std::filesystem::exists(temp_file)) {
             // 获取已传输文件大小
             uintmax_t file_size = std::filesystem::file_size(temp_file);
-            const int chunk_size = 1024 * 511; // 与客户端一致的块大小
+            const int chunk_size = 1024 * 64; // 与客户端一致的块大小
 
             // 计算已完成的块数（向上取整）
             start_chunk = static_cast<int>((file_size + chunk_size - 1) / chunk_size);
@@ -226,7 +168,32 @@ int TcpServer::Hash_Receive_Resume(SOCKET client_sock, const std::string& filena
     return start_chunk;
 }
 
-void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
+void discard_socket_recv_buffer(SOCKET sock) {
+    char buf[4096]; // 临时接收缓冲区
+    fd_set readfds;
+    timeval timeout;
+
+    while (true) {
+        FD_ZERO(&readfds);
+        FD_SET(sock, &readfds);
+
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000; // 最多等 100ms 每轮
+
+        int ret = select(0, &readfds, NULL, NULL, &timeout);
+        if (ret <= 0) {
+            // 超时或错误，说明 socket 当前没有更多可读数据了
+            break;
+        }
+
+        int received = recv(sock, buf, sizeof(buf), 0);
+        if (received <= 0) {
+            break; // 对方关闭连接或出错
+        }
+    }
+}
+
+int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     std::filesystem::path dirpath="download";
     if (!std::filesystem::exists(dirpath)) {
         std::filesystem::create_directory(dirpath);
@@ -241,23 +208,9 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
         }
         received_byte += temp;
     }
-    /*std::string filename(fileinformation.information.header);
-    std::string down_file = "download/temp.txt";
-    std::ofstream file(down_file, std::ios::binary);
-    int state = 0;
-    if (!file) {
-        std::cerr << "无法打开文件！" << std::endl;
-        exit(1);
-    }
-    std::cout << "开始接受文件 " << filename << " 长度为： " << fileinformation.information.filesize << "\n";
-    uint64_t file_size = fileinformation.information.filesize;
-    int segment_num = (file_size - 1) / (1024 * 511) + 1;
-    uint64_t received_total_size = 0;*/
-    std::cout << "接收头信息成功： is_continue = " << fileinformation.information.is_continue << "\n";
-
     std::string filename(fileinformation.information.header);
     uint64_t file_size = fileinformation.information.filesize;
-    int segment_num = (file_size - 1) / (1024 * 511) + 1;
+    int segment_num = (file_size - 1) / (1024 * 64) + 1;
     uint64_t received_total_size = 0;
     int state = 0;
 
@@ -266,7 +219,7 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
 
     if (fileinformation.information.is_continue) {
         int start_chunk = Hash_Receive_Resume(accept_client_Socket_, fileinformation.information.header);
-        received_total_size = start_chunk * (1024 * 511);
+        received_total_size = start_chunk * (1024 * 64);
         state = start_chunk;
         std::string down_file = "download/" + filename + ".tmp";
         file_mode |= std::ios::app;  // 续传时使用追加模式
@@ -279,14 +232,17 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
         exit(1);
     }
     std::cout << "开始接受文件 " << filename << " 长度为： " << fileinformation.information.filesize << "\n";
+    std::string TransConfirm = "ok";
+    static int k1 = 10;
+    static int k2 = 100;
     // 接收数据段
     for (int i = state; i < segment_num; i++) {
-        DataSegment data_segment;
+        DataSegment* data_segment = new DataSegment();
         int data_segment_size = sizeof(DataSegment);
         int received_segment_size = 0;
 
         while (received_segment_size < data_segment_size) {
-            int bytes_received = recv(accept_client_Socket_, reinterpret_cast<char*>(&data_segment) + received_segment_size, data_segment_size - received_segment_size, 0);
+            int bytes_received = recv(accept_client_Socket_, reinterpret_cast<char*>(data_segment) + received_segment_size, data_segment_size - received_segment_size, 0);
             if (bytes_received <= 0) {
                 if (bytes_received == 0) {
                     
@@ -297,7 +253,7 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
                     std::cout << "接收数据段失败: " << WSAGetLastError() << std::endl;
                 }
                 file.close();
-                return;
+                return -1;
             }
             received_segment_size += bytes_received;
         }
@@ -313,13 +269,18 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
         if (read_keys(aes_key, hmac_key)) {
             EVP_MAC* mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
             EVP_MAC_CTX* mac_ctx = EVP_MAC_CTX_new(mac);
-
+            //模拟文件损坏
+            if (k1 == i||k2==i) {
+                hmac_key[0] = '1';
+                k1--;
+                k2--;
+            }
             OSSL_PARAM params[2];
             params[0] = OSSL_PARAM_construct_utf8_string("digest", const_cast<char*>("SHA256"), 0);
             params[1] = OSSL_PARAM_construct_end();
 
             EVP_MAC_init(mac_ctx, hmac_key.data(), hmac_key.size(), params);
-            EVP_MAC_update(mac_ctx, reinterpret_cast<const unsigned char*>(data_segment.data.filedata), static_cast<size_t>(data_segment.data.datasize));
+            EVP_MAC_update(mac_ctx, reinterpret_cast<const unsigned char*>(data_segment->data.filedata), static_cast<size_t>(data_segment->data.datasize));
 
             size_t out_len = SHA256_DIGEST_LENGTH;
             EVP_MAC_final(mac_ctx, calculated_hash, &out_len, SHA256_DIGEST_LENGTH);
@@ -327,41 +288,63 @@ void TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
             EVP_MAC_CTX_free(mac_ctx);
             EVP_MAC_free(mac);
 
-            if (memcmp(calculated_hash, data_segment.data.hash, SHA256_DIGEST_LENGTH) != 0) {
+
+            if (memcmp(calculated_hash, data_segment->data.hash, SHA256_DIGEST_LENGTH) != 0) {
                 std::cout << "数据段 " << i << " 哈希验证失败，数据可能已损坏。\n";
                 // 可以选择继续或中断
+                delete data_segment;
+                TransConfirm = "no";
+                break;
             }
         }
 
         // 如果数据是加密的，需要解密
-        if (data_segment.Decrypt_data() != 0) {
+        if (data_segment->Decrypt_data() != 0) {
             std::cout << "数据段 " << i << " 解密失败。\n";
-            // 可以选择继续或中断
+            delete data_segment;
+            TransConfirm = "no";
+            break;
         }
 
         // 写入文件
-        file.write(data_segment.data.filedata, data_segment.data.datasize);
-        received_total_size += data_segment.data.datasize;
+        file.write(data_segment->data.filedata, data_segment->data.datasize);
+        received_total_size += data_segment->data.datasize;
     }
 
     file.close();
-    std::cout << "文件接收完毕\n";
+
     //这里需要给客户端发送一个完成的信息
     int sent_bytes = 0;
-    std::string TransConfirm = "ok";
-    while (sent_bytes < sizeof(std::string)) {
+    int total_len = TransConfirm.size();
+    if (TransConfirm != "ok") {
+        std::cout << "文件传输失败，需要重传" << std::endl;
+        discard_socket_recv_buffer(accept_client_Socket_);
+    }
+    while (sent_bytes < total_len) {
         int bytes = send(accept_client_Socket_,
-            reinterpret_cast<const char*>(&TransConfirm) + sent_bytes,
-            sizeof(std::string) - sent_bytes, 0);
+            TransConfirm.c_str() + sent_bytes,
+            total_len - sent_bytes, 0);
+        std::cout << bytes << std::endl;
         if (bytes <= 0) {
             std::cerr << "起始块发送失败\n";
-            return;
+            return -1;
         }
         sent_bytes += bytes;
     }
+    if (TransConfirm != "ok") {
+        
 
-    Change_Downlad_FileName(filename);
+        return -1;
+    }
+    else {
+        Change_Downlad_FileName(filename);
+        std::cout << "文件传输完毕" << std::endl;
+        return 0;
+    }
 }
+
+
+
 
 void TcpServer::EventListen() {
     sockaddr_in clientAddr;
@@ -378,7 +361,11 @@ void TcpServer::EventListen() {
         inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
         std::cout << "Client connected: " << clientIP << std::endl;
         Connect(client_Socket_);
-        Hash_Receive(client_Socket_);
+        int flag = Hash_Receive(client_Socket_);
+        while(flag != 0) {
+            flag = Hash_Receive(client_Socket_);
+        }
+
     }
 
 }

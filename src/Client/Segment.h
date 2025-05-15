@@ -11,7 +11,7 @@
 #include <openssl/buffer.h>
 #include <openssl/params.h>
 #include <openssl/core_names.h>
-#define File_segdata_size 1024*511
+#define File_segdata_size 1024*64
 #define PassMaxlen 10
 #pragma pack(push, 1) // 禁用内存对齐
 struct FileSeg {
@@ -21,6 +21,7 @@ struct FileSeg {
 	unsigned char iv[12];        // AES-GCM初始化向量
 	unsigned char auth_tag[16];  // AES-GCM认证标签
 	char filedata[File_segdata_size];//文件数据
+
 };
 
 struct logSeg {

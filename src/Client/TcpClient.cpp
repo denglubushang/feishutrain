@@ -11,6 +11,7 @@ TcpClient::TcpClient() {
         WSACleanup();
         exit(1);
     }
+    ProgressBar progress_bar;
 }
 TcpClient::~TcpClient() {
     closesocket(client_Socket_);
@@ -29,6 +30,8 @@ void TcpClient::Controller() {
     std::cout << "输入你要操作的机器序号：\n";
     std::string server_ip;
     std::cin >> server_ip;
+
+
     server.StopReceiverThread();
 
     Connect(server_ip.c_str());
@@ -42,12 +45,49 @@ void TcpClient::Controller() {
     std::cout << "是否是续传：y/n" << std::endl;
     char tag_continue;
     std::cin >> tag_continue;
+    progress_bar.start();
     if (tag_continue == 'y') {
-        Send_continue(files[seq_file]);
+        
+        int flag = Send_continue(files[seq_file]);
+        while (flag != 0) {
+            std::cout << "\n文件传输失败\n";
+            std::cout << "续传：x,重传：c,退出：q\n";
+            char ch;
+            std::cin >> ch;
+            progress_bar.start();
+            if (ch == 'x') {
+                flag = Send_continue(files[seq_file]);
+            }
+            else if (ch == 'c') {
+                flag = SendFile(files[seq_file]);
+            }
+            else {
+                return;
+            }
+        }
+
     }
     else
-    {
-        SendFile(files[seq_file]);
+    {   
+        int flag = SendFile(files[seq_file]);
+        while (flag != 0) {
+            std::cout << "\n文件传输失败\n";
+            std::cout << "续传：x,重传：c,退出：q\n";
+            char ch;
+            std::cin >> ch;
+            progress_bar.start();
+            if (ch == 'x') {
+                flag = Send_continue(files[seq_file]);
+            }
+            else if (ch == 'c') {
+                flag = SendFile(files[seq_file]);
+            }
+            else {
+                return;
+
+            }
+
+        }
     }
 }
 
@@ -135,19 +175,18 @@ std::vector<std::string> TcpClient::GetFilesInDirectory() {
     return files;
 }
 
-void TcpClient::Send_continue(std::string tag_file_name) {
-    std::cout << "续传文件\n";
+int TcpClient::Send_continue(std::string tag_file_name) {
     HeadSegment head_segment;
-    ProgressBar progress_bar;
     std::ifstream file(tag_file_name, std::ios::binary | std::ios::ate);
     if (!file) {
         std::cerr << "文件打开失败\n";
-        return;
+        return -1;
     }
     std::uint64_t fileSize = file.tellg();
     file.seekg(0, std::ios::beg);  // 初始化到文件头
 
     // 设置续传请求头
+    head_segment.init();
     head_segment.Set_header(tag_file_name);
     head_segment.Set_filesize(fileSize);
     head_segment.Set_Boolean(true);
@@ -165,7 +204,6 @@ void TcpClient::Send_continue(std::string tag_file_name) {
         }
         haved_send += temp;
     }
-    std::cout << "发送续传请求头完成" << head_segment.information.is_continue << "\n";
 
     // 接收起始块号（确保完整接收）
     int start_chunk = 0;
@@ -179,96 +217,123 @@ void TcpClient::Send_continue(std::string tag_file_name) {
         }
         received += bytes;
     }
-    std::cout << "续传文件块号：" << start_chunk << "\n";
+    //std::cout << "续传文件块号：" << start_chunk << "\n";
 
     // 调整文件读取位置
     file.seekg(start_chunk * File_segdata_size, std::ios::beg);
     int segment_num = (fileSize - 1) / File_segdata_size + 1;
-    int segment_seq = start_chunk + 1;  // 直接使用服务端返回的块号
+    int segment_seq = start_chunk ;  // 直接使用服务端返回的块号
 
-    DataSegment datasegment;
+    
     std::uint64_t sended_total_size = start_chunk * File_segdata_size;
-
+    progress_bar.reset(sended_total_size);
     while (segment_seq < segment_num && file) {
-        datasegment.init();
-        datasegment.Set_segid(segment_seq++);
-        file.read(datasegment.data.filedata, File_segdata_size);
+        DataSegment* datasegment = new DataSegment();
+        datasegment->init();
+        datasegment->Set_segid(segment_seq++);
+        file.read(datasegment->data.filedata, File_segdata_size);
         size_t byte_read = file.gcount();
         if (byte_read == 0) break;
 
-        datasegment.Set_datasize(byte_read);
-        datasegment.Encrypt_data();
-        datasegment.Set_hash();
+        datasegment->Set_datasize(byte_read);
+        datasegment->Encrypt_data();
+        datasegment->Set_hash();
 
-        // 发送数据段（确保完整发送）
         int data_segment_size = sizeof(DataSegment);
         int sended_size = 0;
-  
+
         while (sended_size < data_segment_size) {
-            int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
-            std::cout << "文件传了" << temp << std::endl;
-            if (temp == SOCKET_ERROR) {
-                std::cerr << "send() failed: " << WSAGetLastError() << std::endl;
+            fd_set writefds, readfds;
+            FD_ZERO(&writefds);
+            FD_ZERO(&readfds);
+            FD_SET(client_Socket_, &writefds);
+            FD_SET(client_Socket_, &readfds);
+
+            timeval timeout;
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+
+            int ret = select(client_Socket_ + 1, &readfds, &writefds, NULL, &timeout); 
+            if (ret < 0) {
+                std::cerr << "select() failed: " << WSAGetLastError() << std::endl;
                 closesocket(client_Socket_);
                 WSACleanup();
                 exit(1);
             }
-            sended_size += temp;
-        }
+            // 可读，接收服务端消息
+            if (FD_ISSET(client_Socket_, &readfds)) {
+                char buf[64] = { 0 }; // 足够大
+                int received_bytes = 0;
+                int total_len = 2; // 例如"ok"长度
+                while (received_bytes < total_len) {
+                    int bytes = recv(client_Socket_, buf + received_bytes, total_len - received_bytes, 0);
+                    if (bytes <= 0) {
+                        std::cerr << "接收服务端确认块失败\n";
+                        break;
+                    }
+                    received_bytes += bytes;
+                }
+                std::string TransConfirm_recv(buf, received_bytes);
+                head_segment.init();
+                delete datasegment;
+                datasegment = nullptr;
+                file.close();
+                return -1;
 
-        if (file.eof())
-        {
-            Sleep(100);
+            }
+            // 可写，继续发送
+            if (FD_ISSET(client_Socket_, &writefds)) {
+                int temp = send(client_Socket_, reinterpret_cast<const char*>(datasegment) + sended_size, data_segment_size - sended_size, 0);
+                //std::cout << "文件传了" << temp << std::endl;
+                if (temp == SOCKET_ERROR) {
+                    std::cerr << "send() failed: " << WSAGetLastError() << std::endl;
+                    closesocket(client_Socket_);
+                    WSACleanup();
+                    exit(1);
+                }
+                sended_total_size += temp;
+                progress_bar.update(sended_total_size, fileSize);
+                sended_size += temp;
+            }
+
+            
+        }
+        if (file.eof()) {
+            break;
+        }      
+    }
+    char buf[64] = { 0 }; // 足够大
+    int received_bytes = 0;
+    int total_len = 2; // 例如"ok"长度
+    while (received_bytes < total_len) {
+        int bytes = recv(client_Socket_, buf + received_bytes, total_len - received_bytes, 0);
+        if (bytes <= 0) {
+            std::cerr << "接收服务端确认块失败\n";
             break;
         }
-
-        }
-        // 更新进度（基于实际文件数据量）
-        
+        received_bytes += bytes;
     }
-    int received = 0;
-    std::string TransConfirm = "NO";
-    while (received < sizeof(std::string)) {
-        int bytes = recv(client_Socket_, reinterpret_cast<char*>(&TransConfirm) + received, sizeof(std::string) - received, 0);
-        if (bytes <= 0) {
-            std::cerr << "接收块号失败\n";
-            closesocket(client_Socket_);
-            exit(1);
-        }
-        received += bytes;
-    }
-    if (TransConfirm == "ok")
+    std::string TransConfirm_recv(buf, received_bytes);
+    if (TransConfirm_recv != "ok")
     {
-        std::cout << TransConfirm << " " << "文件传输成功\n";
+        return -1;
     }
-    else {
-        std::cout << "文件传输未成功，需要重传\n";
-        char ch;
-        std::cout << "是否重传(y/n):";
-        std::cin >> ch;
-        if (ch == 'y')
-        {
-            Send_continue(tag_file_name);
-        }
-    }
-    Sleep(1000);
     // 最终状态更新
-    progress_bar.update(fileSize, fileSize);
     progress_bar.finish(fileSize);
     std::cout << "文件发送完毕\n";
+    return 0;
 }
 
 
-void TcpClient::SendFile(std::string tag_file_name) {
+int TcpClient::SendFile(std::string tag_file_name) {
     HeadSegment head_segment;
-    ProgressBar progress_bar;
     std::ifstream file(tag_file_name, std::ios::binary | std::ios::ate);
     if (!file) {
         std::cout << "文件打开失败";
     }
     std::uint64_t fileSize = file.tellg(),needsend_size=fileSize;
     file.seekg(0, std::ios::beg);
-    int segment_num = (fileSize - 1) / (1024 * 511) + 1,segment_seq=0;
+    int segment_num = (fileSize - 1) / (1024 * 64) + 1,segment_seq=0;
     head_segment.Set_header(tag_file_name);
     head_segment.Set_filesize(fileSize);
     int headseg_size = sizeof(head_segment),haved_send=0;
@@ -282,70 +347,102 @@ void TcpClient::SendFile(std::string tag_file_name) {
         }
         haved_send += temp;
     }
-    DataSegment datasegment;
     std::uint64_t sended_total_size = 0;
-    while (segment_seq<segment_num) {
-        datasegment.init();
-        datasegment.Set_segid(segment_seq++);
-        file.read(datasegment.data.filedata, File_segdata_size);
+    while (segment_seq < segment_num) {
+        DataSegment* datasegment = new DataSegment();
+        datasegment->init();
+        datasegment->Set_segid(segment_seq++);
+        file.read(datasegment->data.filedata, File_segdata_size);
         size_t byte_read = file.gcount();
-        datasegment.Set_datasize(byte_read);
-        datasegment.Encrypt_data();  // 加密数据
-        datasegment.Set_hash();      // 计算HMAC-SHA256哈希
+        datasegment->Set_datasize(byte_read);
+        datasegment->Encrypt_data();  // 加密数据
+        datasegment->Set_hash();      // 计算HMAC-SHA256哈希
         int data_segment_size = sizeof(DataSegment), sended_size = 0;
+
         while (sended_size < data_segment_size) {
-            int temp = send(client_Socket_, reinterpret_cast<const char*>(&datasegment) + sended_size, data_segment_size - sended_size, 0);
-            std::cout << "data_segment_size: " << data_segment_size << std::endl;
-            std::cout << "sended_size: " << sended_size << std::endl;
-            std::cout << "temp: " << temp << std::endl;
-            if (temp == SOCKET_ERROR) {
-                printf("send() failed: %d\n", WSAGetLastError());
+            fd_set writefds, readfds;
+            FD_ZERO(&readfds);
+            FD_ZERO(&writefds);
+            FD_SET(client_Socket_, &readfds);
+            FD_SET(client_Socket_, &writefds);
+            
+
+            timeval timeout;
+            timeout.tv_sec = 0;
+            timeout.tv_usec = 10000;  // 10ms 微小等待，让CPU有机会响应
+
+            int ret = select(client_Socket_ + 1, &readfds, &writefds, NULL, &timeout);
+            if (ret < 0) {
+                printf("select() failed: %d\n", WSAGetLastError());
                 closesocket(client_Socket_);
                 WSACleanup();
                 exit(1);
             }
-            sended_total_size += temp;
-            progress_bar.update(sended_total_size, fileSize);
-            sended_size += temp;
-        }
-        if (file.eof())
-        {
-            Sleep(100);
-            break;
+            
 
+            // 可读，接收服务端消息
+            if (FD_ISSET(client_Socket_, &readfds)) {
+                char buf[64] = { 0 }; // 足够大
+                int received_bytes = 0;
+                int total_len = 2; // 例如"ok"长度
+                while (received_bytes < total_len) {
+                    int bytes = recv(client_Socket_, buf + received_bytes, total_len - received_bytes, 0);
+                    if (bytes <= 0) {
+                        std::cerr << "接收服务端确认块失败\n";
+                        break;
+                    }
+                    received_bytes += bytes;
+                }
+                std::string TransConfirm_recv(buf, received_bytes);
+                head_segment.init();
+                delete datasegment;
+                datasegment = nullptr;
+                file.close();
+                return -1;
+
+            }
+
+            // 可写，继续发送
+            if (FD_ISSET(client_Socket_, &writefds)) {
+                int temp = send(client_Socket_, reinterpret_cast<const char*>(datasegment) + sended_size, data_segment_size - sended_size, 0);
+                /*std::cout << "data_segment_size: " << data_segment_size << std::endl;
+                std::cout << "sended_size: " << sended_size << std::endl;
+                std::cout << "temp: " << temp << std::endl;*/
+                if (temp == SOCKET_ERROR) {
+                    printf("send() failed: %d\n", WSAGetLastError());
+                    closesocket(client_Socket_);
+                    WSACleanup();
+                    exit(1);
+                }
+                //std::cout << "发送第" << segment_seq << "块" << std::endl;
+                sended_total_size += temp;
+                progress_bar.update(sended_total_size, fileSize);
+                sended_size += temp;
+            }           
+            
+        }
+        if (file.eof()) {
+            break;
         }
     }
-    int received = 0;
-    std::string TransConfirm = "NO";
-    while (received < sizeof(std::string)) {
-        int bytes = recv(client_Socket_, reinterpret_cast<char*>(&TransConfirm) + received, sizeof(std::string) - received, 0);
+    char buf[64] = { 0 }; // 足够大
+    int received_bytes = 0;
+    int total_len = 2; // 例如"ok"长度
+    while (received_bytes < total_len) {
+        int bytes = recv(client_Socket_, buf + received_bytes, total_len - received_bytes, 0);
         if (bytes <= 0) {
-            std::cerr << "接收块号失败\n";
-            closesocket(client_Socket_);
-            exit(1);
+            std::cerr << "接收服务端确认块失败\n";
+            break;
         }
-        received += bytes;
+        received_bytes += bytes;
     }
-    if (TransConfirm == "ok")
+    std::string TransConfirm_recv(buf, received_bytes);
+
+    if (TransConfirm_recv != "ok")
     {
-        std::cout << TransConfirm << " " << "文件传输成功\n";
+        return -1;
+        
     }
-    else {
-        std::cout << "文件传输未成功，需要重传\n";
-        char ch;
-        std::cout<<"是否重传(y/n):";
-        std::cin>>ch;
-        if (ch=='y')
-        {
-            Send_continue(tag_file_name);
-            return;
-        }else {
-            std::cout << "文件发送未成功\n";
-            return;
-        }
-       
-    }
-    //progress_bar.update(fileSize, fileSize);
     progress_bar.finish(fileSize);
-    std::cout << "文件发送完毕\n";
+    return 0;
 }

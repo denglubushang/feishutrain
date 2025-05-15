@@ -28,7 +28,7 @@ public:
 	//断点续传接收文件
 	int Hash_Receive_Resume(SOCKET client_sock, const std::string& filename);
 	//接受文件传输过程
-	void Hash_Receive(SOCKET& accept_client_Socket_);
+	int Hash_Receive(SOCKET& accept_client_Socket_);
 	//事件监听循环
 	void EventListen();
 	//获取下载目录下有哪些文件
