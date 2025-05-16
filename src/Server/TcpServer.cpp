@@ -214,14 +214,23 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     uint64_t received_total_size = 0;
     int state = 0;
 
-    std::string down_file = "download/" + filename + ".tmp";  // 修正临时文件名
+    // 生成唯一的临时文件名--只获取文件名部分
+    char temp_path[MAX_PATH];
+    char temp_filename[MAX_PATH];
+    GetTempPathA(MAX_PATH, temp_path);
+    GetTempFileNameA(temp_path, "FTS_", 0, temp_filename);
+    std::string unique_name = std::filesystem::path(temp_filename).filename().string();
+    DeleteFileA(temp_filename);  // 删除系统创建的临时文件
+
+    // 使用生成的唯一文件名，但保持在download目录下
+    std::string down_file = "download/" + unique_name;
     std::ios::openmode file_mode = std::ios::binary;
+
 
     if (fileinformation.information.is_continue) {
         int start_chunk = Hash_Receive_Resume(accept_client_Socket_, fileinformation.information.header);
         received_total_size = start_chunk * (1024 * 64);
         state = start_chunk;
-        std::string down_file = "download/" + filename + ".tmp";
         file_mode |= std::ios::app;  // 续传时使用追加模式
         std::cout << "续传模式，文件路径: " << down_file << std::endl;
     }
@@ -233,7 +242,7 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     }
     std::cout << "开始接受文件 " << filename << " 长度为： " << fileinformation.information.filesize << "\n";
     std::string TransConfirm = "ok";
-    static int k1 = 10;
+    static int k1 = 0;
     static int k2 = 100;
     // 接收数据段
     for (int i = state; i < segment_num; i++) {
@@ -318,7 +327,7 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     int total_len = TransConfirm.size();
     if (TransConfirm != "ok") {
         std::cout << "文件传输失败，需要重传" << std::endl;
-        discard_socket_recv_buffer(accept_client_Socket_);
+        
     }
     while (sent_bytes < total_len) {
         int bytes = send(accept_client_Socket_,
@@ -333,11 +342,11 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     }
     if (TransConfirm != "ok") {
         
-
+        discard_socket_recv_buffer(accept_client_Socket_);
         return -1;
     }
     else {
-        Change_Downlad_FileName(filename);
+        Change_Downlad_FileName(filename, down_file);
         std::cout << "文件传输完毕" << std::endl;
         return 0;
     }
@@ -382,15 +391,31 @@ std::set<std::string> TcpServer::GetFilesInDirectory()
     return files;
 }
 
-void TcpServer::Change_Downlad_FileName(std::string recvfile_name)
+void TcpServer::Change_Downlad_FileName(std::string recvfile_name, const std::string& temp_file_path)
 {
     std::cout << "文件名为" << recvfile_name << std::endl;
-    std::string temp_name = "download/" + recvfile_name + ".tmp";  // 匹配新的临时文件名格式
-    std::string unique_filename = generateUniqueFileName(recvfile_name);
+
+    // 构建最终文件名（保持原始文件的扩展名）
+    std::string extension;
+    size_t dot_pos = recvfile_name.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        extension = recvfile_name.substr(dot_pos);
+    }
+
+    std::string final_name = recvfile_name;
+    std::string unique_path = "download/" + final_name;
+    int counter = 1;
+
+    // 如果文件已存在，添加数字后缀
+    while (std::filesystem::exists(unique_path + extension)) {
+        final_name = recvfile_name + "(" + std::to_string(counter) + ")";
+        unique_path = "download/" + final_name;
+        counter++;
+    }
 
     try {
-        std::filesystem::rename(temp_name, "download/" + unique_filename);
-        std::cout << "文件已重命名为: " << unique_filename << std::endl;
+        std::filesystem::rename(temp_file_path, unique_path);
+        std::cout << "文件名已重命名为: " << final_name << std::endl;
     }
     catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "重命名失败: " << e.what() << std::endl;

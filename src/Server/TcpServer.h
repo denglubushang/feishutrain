@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <set>
 #include <winsock2.h>
+#include <windows.h>
 #include <ws2tcpip.h>
 #include "Segment.h"
 class TcpServer
@@ -34,7 +35,7 @@ public:
 	//获取下载目录下有哪些文件
 	std::set<std::string> GetFilesInDirectory();
 	//将temp转为文件
-	void Change_Downlad_FileName(std::string recvfile_name);
+	void Change_Downlad_FileName(std::string recvfile_name, const std::string& temp_file_path);
 	//查看当前文件夹是否有传输文件名
 	bool fileExists(const std::string& filename);
 	// 生成新文件名，避免覆盖
