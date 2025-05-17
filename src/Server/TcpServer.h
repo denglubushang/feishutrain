@@ -5,6 +5,7 @@
 #include <cstring>
 #include <functional>
 #include <filesystem>
+#include <sstream>
 #include <set>
 #include <winsock2.h>
 #include <windows.h>
@@ -36,6 +37,10 @@ public:
 	std::set<std::string> GetFilesInDirectory();
 	//将temp转为文件
 	void Change_Downlad_FileName(std::string recvfile_name, const std::string& temp_file_path);
+	//map映射文件名
+	std::string GetUniqueNameFromMap(const std::string& filename);
+	//删除映射文件名
+	void RemoveFileMapping(const std::string& filename, const std::string& unique_name, const std::string& map_path);
 	//查看当前文件夹是否有传输文件名
 	bool fileExists(const std::string& filename);
 	// 生成新文件名，避免覆盖
