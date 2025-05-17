@@ -154,7 +154,7 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
         if (message.find("discovery") != std::string::npos) {
             //std::cerr << "Receiver message: " << message << "from " << sender_ip << std::endl;
             server->addClient(sender_ip, 8888, true);
-            std::cout << "Client " << sender_ip << " is online" << std::endl;  // 这里输出测试信息
+            //std::cout << "Client " << sender_ip << " is online" << std::endl;  // 这里输出测试信息
         }
         else if (message.find("offline") != std::string::npos) {
             //std::cerr << "Receiver offfline message from " << sender_ip << "message :" << message << std::endl;
@@ -175,6 +175,25 @@ DWORD WINAPI Server::ServerReceiverThread(LPVOID lpParam) {
     }
     closesocket(recv_socket);
     return 0;
+}
+
+void Server::CheckClientsAndSelect() {
+    int retries = 5;
+
+    while (retries-- > 0) {
+        if (HasClients()) {
+            check_success = true;
+            check_done = true;
+            return;
+        }
+
+        std::cout << "暂无客户端，" << retries << " 次重试机会剩余..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+
+    std::cerr << "重试结束，仍无客户端在线。终止程序。" << std::endl;
+    check_success = false;
+    check_done = true;
 }
 
 
@@ -247,6 +266,58 @@ int Server::SendOfflineMessage() {
 
     std::cout << "Sent offline message to " << broadcast_ip << std::endl;
     return 0;
+}
+
+
+std::string Server::SelectClientIP() {
+    std::vector<std::string> ip_list;
+    int index = 1;
+
+    std::cout << "在线的服务器:\n";
+    for (const auto& pair : client_map) {
+        const ClientInfo& client = pair.second;
+        std::cout << index << ". " << client.ip_address
+            << " : " << client.port
+            << " - " << (client.is_online ? "在线" : "离线") << "\n";
+        ip_list.push_back(client.ip_address);
+        ++index;
+    }
+
+    std::cout << "输入服务器对应的序号进行选择要建立TCP连接的服务器: ";
+    int selection = 0;
+    std::cin >> selection;
+
+    if (selection < 1 || selection > static_cast<int>(ip_list.size())) {
+        std::cout << "错误的服务器序号。\n";
+        return "";
+    }
+
+    std::string selected_ip = ip_list[selection - 1];
+    std::cout << "你选择的IP地址是: " << selected_ip << std::endl;
+
+    return selected_ip;
+}
+
+// 判断是否有客户端，线程安全访问client_map
+bool Server::HasClients() {
+    std::lock_guard<std::mutex> lock(client_map_mutex);
+    return !client_map.empty();
+}
+
+void Server::StartCheckThread() {
+    check_done = false;
+    check_success = false;
+    check_thread = std::thread(&Server::CheckClientsAndSelect, this);
+}
+
+// 等待检测线程结束
+void Server::WaitForCheckThread() {
+    if (check_thread.joinable())
+        check_thread.join();
+}
+
+bool Server::GetCheckSuccess() const {
+    return check_success;
 }
 
 Server::~Server()
