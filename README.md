@@ -1,8 +1,8 @@
 # feishutrain
 ## 端到端的、安全的局域网传输工具
-主要功能为局域网内文件传输  
+主要功能为局域网内文件传输（目前只支持Windows）  
 ## 功能介绍
-本产品分为client和server两部分  
+本产品分为client和server两部分(分别位于Client文件夹和Server文件夹下，通过cmake构建，需要本机安装有opensll库)  
 ### client模块
 client程序用来发送文件  
 1.程序启动后会检测局域网内其他启用了本产品server模块的机器，将其ip返回给用户  
