@@ -1,60 +1,70 @@
-cmake_minimum_required(VERSION 3.15)
-project(TcpServerApp)
+# 设置最低 CMake 版本要求
+cmake_minimum_required(VERSION 3.14)
+
+# 定义项目名称和语言
+project(Server CXX)
 
 # 设置 C++ 标准
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
-# 包含系统头文件
-include_directories(
-    ${PROJECT_SOURCE_DIR}
-    ${OPENSSL_INCLUDE_DIR}
-)
+# 收集源文件（假设所有源文件在当前目录）
+file(GLOB SRC_FILES "*.cpp")
 
-# 查找 OpenSSL（通过 vcpkg 提供）
-find_package(OpenSSL REQUIRED)
-if(NOT OPENSSL_FOUND)
-    message(FATAL_ERROR "OpenSSL not found via vcpkg")
+# 添加可执行目标
+add_executable(${PROJECT_NAME} ${SRC_FILES})
+
+# Windows 平台配置
+if(WIN32)
+    # 链接 Windows 系统库
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        Ws2_32.lib
+        iphlpapi.lib
+    )
 endif()
 
-# 添加源文件（根据你的实际路径调整）
-set(SOURCES
-    main.cpp          # 包含 main() 的文件
-    TcpServer.cpp     # TcpServer 类实现
-    Segment.cpp       # DataSegment 和 HeadSegment 实现
-    udp_client.cpp
-    udp_server.cpp
-    online_manager.cpp
+# OpenSSL 配置
+find_package(OpenSSL REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
 )
 
-# 创建可执行文件 - 直接指定源文件而不使用变量
-add_executable(TcpServerApp 
-    main.cpp
-    TcpServer.cpp
-    Segment.cpp
-    udp_client.cpp
-    udp_server.cpp
-    online_manager.cpp
+# 可选：确保 OpenSSL 头文件路径正确
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${OPENSSL_INCLUDE_DIRS}
 )
 
-# 包含头文件路径
-include_directories(
-    ${PROJECT_SOURCE_DIR}
-    ${OPENSSL_INCLUDE_DIR}
-)
+# 定义资源文件路径
+set(KEY_FILE ${PROJECT_SOURCE_DIR}/key.txt)
+set(PASSWORD_FILE ${PROJECT_SOURCE_DIR}/password.txt)
 
-# 链接库
-target_link_libraries(${PROJECT_NAME}
-    PRIVATE
-        OpenSSL::Crypto  # OpenSSL 加密库
-        ws2_32           # Windows Socket API
-        iphlpapi         # 网络相关功能
-)
-
-# MSVC 编译器设置
-if(MSVC)
-    add_compile_options(/W4 /WX)                # 启用 Warnings as Errors
-    add_compile_options(/DUNICODE /D_UNICODE)    # Unicode 支持
-    add_compile_options(/DWIN32_LEAN_AND_MEAN)   # 快速编译 Windows 头文件
+# 判断是否为多配置生成器（如 Visual Studio）
+if(CMAKE_CONFIGURATION_TYPES OR CMAKE_BUILD_TYPE)
+    foreach(config ${CMAKE_CONFIGURATION_TYPES} ${CMAKE_BUILD_TYPE})
+        # 复制 key.txt
+        configure_file(
+            ${KEY_FILE}
+            ${CMAKE_CURRENT_BINARY_DIR}/${config}/key.txt
+            COPYONLY
+        )
+        # 复制 password.txt
+        configure_file(
+            ${PASSWORD_FILE}
+            ${CMAKE_CURRENT_BINARY_DIR}/${config}/password.txt
+            COPYONLY
+        )
+    endforeach()
+else()
+    # 单配置构建（如 Makefile）：复制到构建目录根目录
+    configure_file(
+        ${KEY_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/key.txt
+        COPYONLY
+    )
+    configure_file(
+        ${PASSWORD_FILE}
+        ${CMAKE_CURRENT_BINARY_DIR}/password.txt
+        COPYONLY
+    )
 endif()
