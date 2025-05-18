@@ -24,17 +24,27 @@ private:
     HANDLE hReceiverThread;
     bool stop_thread = false;
     OnlineManager* online_manager;  // 添加指针成员
+    std::mutex client_map_mutex;
+    std::thread check_thread;
+    std::atomic<bool> check_done;
+    std::atomic<bool> check_success;
+    std::string selected_ip;
 
     bool GetWirelessIP();
     void addClient(const std::string& ip, int port, bool is_online);
     static DWORD WINAPI ServerReceiverThread(LPVOID lpParam);
+    void CheckClientsAndSelect();
 
 public:
     Server();
     ~Server();
     void close();
-    //std::unordered_map<std::string, ClientInfo> client_map;
     int StartReceiverThread();
     int StopReceiverThread();
     int SendOfflineMessage();
+    std::string SelectClientIP();
+    bool HasClients();
+    void StartCheckThread();
+    void WaitForCheckThread();
+    bool GetCheckSuccess() const;
 };

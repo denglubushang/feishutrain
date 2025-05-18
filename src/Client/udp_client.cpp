@@ -80,7 +80,7 @@ DWORD WINAPI Client::ClientBroadcastThread(LPVOID lpParam)
             delete params;
             return -1;
         }
-        Sleep(3000);
+        Sleep(1000);
     }
     delete params;
     return 0;

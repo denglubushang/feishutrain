@@ -133,7 +133,8 @@ bool read_keys(std::vector<unsigned char>& aes_key, std::vector<unsigned char>& 
 //找到续传文件的块数
 int TcpServer::Hash_Receive_Resume(SOCKET client_sock, const std::string& filename) {
     int start_chunk = 0;
-    const std::string temp_file = "download/" + filename + ".tmp";; // 文件路径  -- 如果有多个文件的话需要修改
+    std::string unique_name = GetUniqueNameFromMap(filename);
+    const std::string temp_file = "download/" + unique_name; // 文件路径  -- 如果有多个文件的话需要修改
 
     try {
         if (std::filesystem::exists(temp_file)) {
@@ -213,15 +214,37 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     int segment_num = (file_size - 1) / (1024 * 64) + 1;
     uint64_t received_total_size = 0;
     int state = 0;
-
-    std::string down_file = "download/" + filename + ".tmp";  // 修正临时文件名
+    //初始化文件名
+    std::string unique_name = filename;
+    // 生成唯一的临时文件名--只获取文件名部分
+    if (!fileinformation.information.is_continue) //这里默认的is_continue为false , 续传的时候不会重新生成文件名
+    {
+        char temp_path[MAX_PATH];
+        char temp_filename[MAX_PATH];
+        GetTempPathA(MAX_PATH, temp_path);
+        GetTempFileNameA(temp_path, "FTS_", 0, temp_filename);
+        unique_name = std::filesystem::path(temp_filename).filename().string();
+        DeleteFileA(temp_filename);  // 删除系统创建的临时文件
+        //加入唯一临时文件名和原来文件名的映射
+        std::ofstream mapfile("download/map.txt", std::ios::app);
+        if (mapfile) {
+            mapfile << filename << " " << unique_name << std::endl;
+            mapfile.close();
+        }
+        else {
+            std::cerr << "无法打开 map.txt 写入文件映射信息" << std::endl;
+        }
+    }
+    // 使用生成的唯一文件名，但保持在download目录下
+    std::string down_file = "download/" + unique_name;
     std::ios::openmode file_mode = std::ios::binary;
 
     if (fileinformation.information.is_continue) {
         int start_chunk = Hash_Receive_Resume(accept_client_Socket_, fileinformation.information.header);
         received_total_size = start_chunk * (1024 * 64);
         state = start_chunk;
-        std::string down_file = "download/" + filename + ".tmp";
+        unique_name = GetUniqueNameFromMap(filename);
+        down_file = "download/" + unique_name;
         file_mode |= std::ios::app;  // 续传时使用追加模式
         std::cout << "续传模式，文件路径: " << down_file << std::endl;
     }
@@ -233,7 +256,7 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     }
     std::cout << "开始接受文件 " << filename << " 长度为： " << fileinformation.information.filesize << "\n";
     std::string TransConfirm = "ok";
-    static int k1 = 10;
+    static int k1 = 0;
     static int k2 = 100;
     // 接收数据段
     for (int i = state; i < segment_num; i++) {
@@ -318,7 +341,7 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     int total_len = TransConfirm.size();
     if (TransConfirm != "ok") {
         std::cout << "文件传输失败，需要重传" << std::endl;
-        discard_socket_recv_buffer(accept_client_Socket_);
+        
     }
     while (sent_bytes < total_len) {
         int bytes = send(accept_client_Socket_,
@@ -333,11 +356,13 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     }
     if (TransConfirm != "ok") {
         
-
+        discard_socket_recv_buffer(accept_client_Socket_);
         return -1;
     }
     else {
-        Change_Downlad_FileName(filename);
+        Change_Downlad_FileName(filename, down_file);
+        //
+        RemoveFileMapping(filename, unique_name, "download/map.txt"); // 删除映射
         std::cout << "文件传输完毕" << std::endl;
         return 0;
     }
@@ -382,15 +407,33 @@ std::set<std::string> TcpServer::GetFilesInDirectory()
     return files;
 }
 
-void TcpServer::Change_Downlad_FileName(std::string recvfile_name)
+void TcpServer::Change_Downlad_FileName(std::string recvfile_name, const std::string& temp_file_path)
 {
     std::cout << "文件名为" << recvfile_name << std::endl;
-    std::string temp_name = "download/" + recvfile_name + ".tmp";  // 匹配新的临时文件名格式
-    std::string unique_filename = generateUniqueFileName(recvfile_name);
+
+    // 分离主文件名和扩展名
+    std::string extension;
+    std::string base_name = recvfile_name;
+    size_t dot_pos = recvfile_name.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        extension = recvfile_name.substr(dot_pos);           // 包含点的后缀，如 ".txt"
+        base_name = recvfile_name.substr(0, dot_pos);        // 不包含扩展名的部分
+    }
+
+    std::string final_name = base_name + extension;
+    std::string unique_path = "download/" + final_name;
+    int counter = 1;
+
+    // 如果文件已存在，添加数字后缀在扩展名前
+    while (std::filesystem::exists(unique_path)) {
+        final_name = base_name + "(" + std::to_string(counter) + ")" + extension;
+        unique_path = "download/" + final_name;
+        counter++;
+    }
 
     try {
-        std::filesystem::rename(temp_name, "download/" + unique_filename);
-        std::cout << "文件已重命名为: " << unique_filename << std::endl;
+        std::filesystem::rename(temp_file_path, unique_path);
+        std::cout << "文件名已重命名为: " << final_name << std::endl;
     }
     catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "重命名失败: " << e.what() << std::endl;
@@ -398,3 +441,52 @@ void TcpServer::Change_Downlad_FileName(std::string recvfile_name)
 }
 
 
+std::string TcpServer::GetUniqueNameFromMap(const std::string& filename) {
+    std::ifstream mapfile("download/map.txt");
+    if (!mapfile) {
+        std::cerr << "无法打开 map.txt 文件" << std::endl;
+        return "";
+    }
+
+    std::string line, name, unique;
+    while (std::getline(mapfile, line)) {
+        std::istringstream iss(line);
+        if (iss >> name >> unique) {
+            if (name == filename) {
+                return unique;
+            }
+        }
+    }
+    return "";
+}
+
+// 删除 map.txt 中 filename 的映射项
+void TcpServer::RemoveFileMapping(const std::string& filename,const std::string& unique_name, const std::string& map_path ) {
+    std::ifstream infile(map_path);
+    if (!infile.is_open()) {
+        std::cerr << "无法打开映射文件: " << map_path << std::endl;
+        return;
+    }
+
+    std::vector<std::string> new_lines;
+    std::string origin, temp;
+
+    while (infile >> origin >> temp) {
+        if (origin != filename || temp != unique_name) {
+            new_lines.push_back(origin + " " + temp);
+        }
+    }
+    infile.close();
+
+    // 重新写入 map.txt（覆盖原文件）
+    std::ofstream outfile(map_path, std::ios::trunc);
+    if (!outfile.is_open()) {
+        std::cerr << "无法写入映射文件: " << map_path << std::endl;
+        return;
+    }
+
+    for (const auto& line : new_lines) {
+        outfile << line << std::endl;
+    }
+    outfile.close();
+}

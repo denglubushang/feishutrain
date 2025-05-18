@@ -27,28 +27,46 @@ void TcpClient::Controller() {
     server.StartReceiverThread();
     client.ClientBroadcast(8888);
 
-    std::cout << "输入你要操作的机器序号：\n";
+    /*std::cout << "输入你要操作的机器序号：\n";
     std::string server_ip;
-    std::cin >> server_ip;
+    std::cin >> server_ip;*/
 
+	server.StartCheckThread();
+    server.WaitForCheckThread();
+    if (!server.GetCheckSuccess()) {
+        std::cerr << "检测客户端失败或未选择有效IP，程序退出" << std::endl;
+        return ;
+    }
+    std::string target_ip = server.SelectClientIP();
 
     server.StopReceiverThread();
 
-    Connect(server_ip.c_str());
-    std::vector<std::string> files = GetFilesInDirectory();
+    Connect(target_ip.c_str());
+    std::cout << "请输入要查看的目录路径：";
+    std::string directory_path;
+    std::cin >> directory_path;
+    std::vector<std::string> files = GetFilesInDirectory(directory_path);
+    std::cout << "可以传输以下文件：\n";
+
     for (int i = 0;i < files.size();i++) {
         std::cout << i << ": " << files[i]<<"\n";
     }
     std::cout << "选择要发送的文件序号：";
     int seq_file;
     std::cin >> seq_file;
+    if (seq_file < 0 || seq_file >= files.size()) {
+        std::cerr << "输入的文件序号非法，程序终止。\n";
+        return;
+    }
     std::cout << "是否是续传：y/n" << std::endl;
     char tag_continue;
     std::cin >> tag_continue;
     progress_bar.start();
+
+    std::string selected_file = directory_path + "/" + files[seq_file];
     if (tag_continue == 'y') {
         
-        int flag = Send_continue(files[seq_file]);
+        int flag = Send_continue(selected_file);
         while (flag != 0) {
             std::cout << "\n文件传输失败\n";
             std::cout << "续传：x,重传：c,退出：q\n";
@@ -56,19 +74,20 @@ void TcpClient::Controller() {
             std::cin >> ch;
             progress_bar.start();
             if (ch == 'x') {
-                flag = Send_continue(files[seq_file]);
+                flag = Send_continue(selected_file);
             }
             else if (ch == 'c') {
-                flag = SendFile(files[seq_file]);
+                flag = SendFile(selected_file);
             }
             else {
+                std::cout  << "传输结束，程序终止。\n";
                 return;
             }
         }
     }
     else
     {   
-        int flag = SendFile(files[seq_file]);
+        int flag = SendFile(selected_file);
         while (flag != 0) {
             std::cout << "\n文件传输失败\n";
             std::cout << "续传：x,重传：c,退出：q\n";
@@ -76,16 +95,15 @@ void TcpClient::Controller() {
             std::cin >> ch;
             progress_bar.start();
             if (ch == 'x') {
-                flag = Send_continue(files[seq_file]);
+                flag = Send_continue(selected_file);
             }
             else if (ch == 'c') {
-                flag = SendFile(files[seq_file]);
+                flag = SendFile(selected_file);
             }
             else {
+                std::cout << "传输结束，程序终止。\n";
                 return;
-
             }
-
         }
     }
 }
@@ -146,7 +164,7 @@ void TcpClient::Connect(const char* tag_ip ) {
         if (bytesReceived > 0) {
             buffer[bytesReceived] = '\0';  // 确保字符串以 NULL 结尾
             if (tag_rev.compare(0, tag_rev.size(), buffer, bytesReceived)==0) {
-                std::cout << "可以传输以下文件：\n";
+                //std::cout << "可以传输以下文件：\n";
 
                 break;
             }
@@ -163,16 +181,22 @@ void TcpClient::Connect(const char* tag_ip ) {
 
 }
 
-std::vector<std::string> TcpClient::GetFilesInDirectory() {
+std::vector<std::string> TcpClient::GetFilesInDirectory(const std::string& directory_path) {
     std::vector<std::string> files;
 
-    for (const auto& entry : std::filesystem::directory_iterator("./")) {
-        if (entry.is_regular_file()) {
-            files.push_back(entry.path().filename().string());
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(directory_path)) {
+            if (entry.is_regular_file()) {
+                files.push_back(entry.path().filename().string()); // 只使用文件名
+            }
         }
+    }
+    catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "访问目录失败: " << e.what() << std::endl;
     }
     return files;
 }
+
 
 int TcpClient::Send_continue(std::string tag_file_name) {
     HeadSegment head_segment;

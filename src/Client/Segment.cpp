@@ -10,9 +10,12 @@ void HeadSegment::Set_Boolean(bool is_continue) {
 
 int HeadSegment::Set_header(std::string filename)
 {
-	strcpy_s(information.header, filename.c_str());
+	std::filesystem::path filepath(filename);
+	std::string pure_filename = filepath.filename().string();
+	strcpy_s(information.header, pure_filename.c_str());
 	return 0;
 }
+
 
 
 
