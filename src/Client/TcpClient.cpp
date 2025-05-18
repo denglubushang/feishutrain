@@ -27,14 +27,21 @@ void TcpClient::Controller() {
     server.StartReceiverThread();
     client.ClientBroadcast(8888);
 
-    std::cout << "输入你要操作的机器序号：\n";
+    /*std::cout << "输入你要操作的机器序号：\n";
     std::string server_ip;
-    std::cin >> server_ip;
+    std::cin >> server_ip;*/
 
+	server.StartCheckThread();
+    server.WaitForCheckThread();
+    if (!server.GetCheckSuccess()) {
+        std::cerr << "检测客户端失败或未选择有效IP，程序退出" << std::endl;
+        return ;
+    }
+    std::string target_ip = server.SelectClientIP();
 
     server.StopReceiverThread();
 
-    Connect(server_ip.c_str());
+    Connect(target_ip.c_str());
     std::cout << "请输入要查看的目录路径：";
     std::string directory_path;
     std::cin >> directory_path;
