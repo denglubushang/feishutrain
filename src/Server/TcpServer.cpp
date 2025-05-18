@@ -168,7 +168,7 @@ int TcpServer::Hash_Receive_Resume(SOCKET client_sock, const std::string& filena
     return start_chunk;
 }
 
-void discard_socket_recv_buffer(SOCKET sock) {
+void TcpServer::discard_socket_recv_buffer(SOCKET sock) {
     char buf[4096]; // 临时接收缓冲区
     fd_set readfds;
     timeval timeout;

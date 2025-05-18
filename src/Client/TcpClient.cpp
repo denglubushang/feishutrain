@@ -65,7 +65,6 @@ void TcpClient::Controller() {
                 return;
             }
         }
-
     }
     else
     {   
