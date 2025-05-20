@@ -66,7 +66,7 @@ void TcpServer::Connect(SOCKET& accept_client_Socket_) {
 }
 
 
-std::string TcpServer::generateUniqueFileName(const std::string& original_filename) {
+std::string TcpServer::GenerateUniqueFileName(const std::string& original_filename) {
     std::string base_name = original_filename;
     std::string extension = "";
 
@@ -131,7 +131,7 @@ bool read_keys(std::vector<unsigned char>& aes_key, std::vector<unsigned char>& 
 }
 
 //找到续传文件的块数
-int TcpServer::Hash_Receive_Resume(SOCKET client_sock, const std::string& filename) {
+int TcpServer::HashReceiveResume(SOCKET client_sock, const std::string& filename) {
     int start_chunk = 0;
     std::string unique_name = GetUniqueNameFromMap(filename);
     const std::string temp_file = "download/" + unique_name; // 文件路径  -- 如果有多个文件的话需要修改
@@ -194,7 +194,7 @@ void discard_socket_recv_buffer(SOCKET sock) {
     }
 }
 
-int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
+int TcpServer::HashReceive(SOCKET& accept_client_Socket_) {
     std::filesystem::path dirpath="download";
     if (!std::filesystem::exists(dirpath)) {
         std::filesystem::create_directory(dirpath);
@@ -240,7 +240,7 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
     std::ios::openmode file_mode = std::ios::binary;
 
     if (fileinformation.information.is_continue) {
-        int start_chunk = Hash_Receive_Resume(accept_client_Socket_, fileinformation.information.header);
+        int start_chunk = HashReceiveResume(accept_client_Socket_, fileinformation.information.header);
         received_total_size = start_chunk * (1024 * 64);
         state = start_chunk;
         unique_name = GetUniqueNameFromMap(filename);
@@ -360,7 +360,7 @@ int TcpServer::Hash_Receive(SOCKET& accept_client_Socket_) {
         return -1;
     }
     else {
-        Change_Downlad_FileName(filename, down_file);
+        ChangeDownladFileName(filename, down_file);
         //
         RemoveFileMapping(filename, unique_name, "download/map.txt"); // 删除映射
         std::cout << "文件传输完毕" << std::endl;
@@ -386,9 +386,9 @@ void TcpServer::EventListen() {
         inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
         std::cout << "Client connected: " << clientIP << std::endl;
         Connect(client_Socket_);
-        int flag = Hash_Receive(client_Socket_);
+        int flag = HashReceive(client_Socket_);
         while(flag != 0) {
-            flag = Hash_Receive(client_Socket_);
+            flag = HashReceive(client_Socket_);
         }
 
     }
@@ -407,7 +407,7 @@ std::set<std::string> TcpServer::GetFilesInDirectory()
     return files;
 }
 
-void TcpServer::Change_Downlad_FileName(std::string recvfile_name, const std::string& temp_file_path)
+void TcpServer::ChangeDownladFileName(std::string recvfile_name, const std::string& temp_file_path)
 {
     std::cout << "文件名为" << recvfile_name << std::endl;
 

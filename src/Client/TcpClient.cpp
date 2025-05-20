@@ -66,7 +66,7 @@ void TcpClient::Controller() {
     std::string selected_file = directory_path + "/" + files[seq_file];
     if (tag_continue == 'y') {
         
-        int flag = Send_continue(selected_file);
+        int flag = SendContinue(selected_file);
         while (flag != 0) {
             std::cout << "\n文件传输失败\n";
             std::cout << "续传：x,重传：c,退出：q\n";
@@ -74,7 +74,7 @@ void TcpClient::Controller() {
             std::cin >> ch;
             progress_bar.start();
             if (ch == 'x') {
-                flag = Send_continue(selected_file);
+                flag = SendContinue(selected_file);
             }
             else if (ch == 'c') {
                 flag = SendFile(selected_file);
@@ -96,7 +96,7 @@ void TcpClient::Controller() {
             std::cin >> ch;
             progress_bar.start();
             if (ch == 'x') {
-                flag = Send_continue(selected_file);
+                flag = SendContinue(selected_file);
             }
             else if (ch == 'c') {
                 flag = SendFile(selected_file);
@@ -199,7 +199,7 @@ std::vector<std::string> TcpClient::GetFilesInDirectory(const std::string& direc
 }
 
 
-int TcpClient::Send_continue(std::string tag_file_name) {
+int TcpClient::SendContinue(std::string tag_file_name) {
     HeadSegment head_segment;
     std::ifstream file(tag_file_name, std::ios::binary | std::ios::ate);
     if (!file) {

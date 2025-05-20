@@ -28,22 +28,22 @@ public:
 	//接受文件传输过程
 	void Receive(SOCKET& accept_client_Socket_);
 	//断点续传接收文件
-	int Hash_Receive_Resume(SOCKET client_sock, const std::string& filename);
+	int HashReceiveResume(SOCKET client_sock, const std::string& filename);
 	//接受文件传输过程
-	int Hash_Receive(SOCKET& accept_client_Socket_);
+	int HashReceive(SOCKET& accept_client_Socket_);
 	//事件监听循环
 	void EventListen();
 	//获取下载目录下有哪些文件
 	std::set<std::string> GetFilesInDirectory();
 	//将temp转为文件
-	void Change_Downlad_FileName(std::string recvfile_name, const std::string& temp_file_path);
+	void ChangeDownladFileName(std::string recvfile_name, const std::string& temp_file_path);
 	//map映射文件名
 	std::string GetUniqueNameFromMap(const std::string& filename);
 	//删除映射文件名
 	void RemoveFileMapping(const std::string& filename, const std::string& unique_name, const std::string& map_path);
 	//查看当前文件夹是否有传输文件名
-	bool fileExists(const std::string& filename);
+	bool FileExists(const std::string& filename);
 	// 生成新文件名，避免覆盖
-	std::string generateUniqueFileName(const std::string& fileName);
+	std::string GenerateUniqueFileName(const std::string& fileName);
 };
 
